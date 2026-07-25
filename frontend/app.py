@@ -1,16 +1,37 @@
-"""Streamlit frontend — Claude-inspired chat UI."""
+"""RAG Chatbot Application — Fullstack Streamlit App."""
 
 from __future__ import annotations
 
 import base64
 import os
+import uuid
+from datetime import datetime
 from io import BytesIO
 
-import httpx
 import streamlit as st
 from PIL import Image
 
-BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+from backend.config import settings
+from backend.db.database import Database
+from backend.rag.engine import AdvancedRAGEngine
+
+# ── Initialize Database & RAG Engine ──────────────────────────────────────────
+@st.cache_resource
+def get_db_and_engine():
+    settings.data_path.mkdir(parents=True, exist_ok=True)
+    settings.storage_path.mkdir(parents=True, exist_ok=True)
+    settings.documents_path.mkdir(parents=True, exist_ok=True)
+    settings.uploads_path.mkdir(parents=True, exist_ok=True)
+    
+    db = Database(settings.db_path)
+    engine = AdvancedRAGEngine(db)
+    return db, engine
+
+try:
+    db, rag_engine = get_db_and_engine()
+except Exception as e:
+    st.error(f"Error initializing RAG Engine: {e}")
+    db, rag_engine = None, None
 
 st.set_page_config(
     page_title="RAG Chatbot",
@@ -19,7 +40,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Claude-inspired CSS ───────────────────────────────────────────────────────
+# ── Styling ───────────────────────────────────────────────────────────────────
 st.markdown(
     """
 <style>
@@ -102,18 +123,6 @@ section[data-testid="stSidebar"] p {
     background: #c4664a;
 }
 
-/* Conversation list item */
-.conv-item {
-    padding: 8px 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 13px;
-    color: #ccc;
-    margin-bottom: 2px;
-}
-.conv-item:hover { background: #2a2a2a; }
-.conv-active { background: #333 !important; color: #fff !important; }
-
 /* Sources badge */
 .source-badge {
     display: inline-block;
@@ -136,44 +145,11 @@ section[data-testid="stSidebar"] p {
     margin: 2px;
 }
 
-/* Hide streamlit branding */
 .stDeployButton { display: none; }
 </style>
 """,
     unsafe_allow_html=True,
 )
-
-
-def api_get(path: str):
-    with httpx.Client(timeout=120.0) as client:
-        r = client.get(f"{BACKEND_URL}{path}")
-        r.raise_for_status()
-        return r.json()
-
-
-def api_post(path: str, payload: dict):
-    with httpx.Client(timeout=120.0) as client:
-        r = client.post(f"{BACKEND_URL}{path}", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-
-def api_delete(path: str):
-    with httpx.Client(timeout=30.0) as client:
-        r = client.delete(f"{BACKEND_URL}{path}")
-        r.raise_for_status()
-        return r.json()
-
-
-def api_upload(file_bytes: bytes, filename: str, user_id: str):
-    with httpx.Client(timeout=120.0) as client:
-        r = client.post(
-            f"{BACKEND_URL}/documents/upload",
-            files={"file": (filename, file_bytes)},
-            params={"user_id": user_id},
-        )
-        r.raise_for_status()
-        return r.json()
 
 
 def image_to_base64(image: Image.Image) -> str:
@@ -200,6 +176,7 @@ def init_state():
 init_state()
 
 
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### ✦ RAG Chatbot")
     st.markdown(
@@ -208,7 +185,6 @@ with st.sidebar:
     )
     st.divider()
 
-    # User login / register
     username_input = st.text_input(
         "Your name",
         value=st.session_state.username or "",
@@ -219,45 +195,37 @@ with st.sidebar:
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Sign In", use_container_width=True, type="primary"):
-            if username_input.strip():
-                try:
-                    user = api_post("/users", {"username": username_input.strip()})
-                    st.session_state.user_id = user["user_id"]
-                    st.session_state.username = user["username"]
-                    convs = api_get(f"/conversations/{user['user_id']}")
-                    st.session_state.conversations = convs
-                    if convs:
-                        st.session_state.conversation_id = convs[0]["conversation_id"]
-                        msgs = api_get(f"/messages/{convs[0]['conversation_id']}")
-                        st.session_state.messages = msgs
-                    else:
-                        new_conv = api_post(
-                            "/conversations",
-                            {"user_id": user["user_id"], "title": "New Chat"},
-                        )
-                        st.session_state.conversation_id = new_conv["conversation_id"]
-                        st.session_state.messages = []
-                        st.session_state.conversations = [new_conv]
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Could not connect to backend: {exc}")
+            if username_input.strip() and db:
+                existing = db.get_user_by_username(username_input.strip())
+                if not existing:
+                    user = db.create_user(username_input.strip())
+                else:
+                    user = existing
+                
+                st.session_state.user_id = user["user_id"]
+                st.session_state.username = user["username"]
+                convs = db.list_conversations(user["user_id"])
+                st.session_state.conversations = convs
+                if convs:
+                    st.session_state.conversation_id = convs[0]["conversation_id"]
+                    st.session_state.messages = db.get_messages(convs[0]["conversation_id"])
+                else:
+                    new_conv = db.create_conversation(user["user_id"], "New Chat")
+                    st.session_state.conversation_id = new_conv["conversation_id"]
+                    st.session_state.messages = []
+                    st.session_state.conversations = [new_conv]
+                st.rerun()
             else:
                 st.warning("Please enter a username.")
 
     with col2:
         if st.button("New Chat", use_container_width=True):
-            if st.session_state.user_id:
-                try:
-                    new_conv = api_post(
-                        "/conversations",
-                        {"user_id": st.session_state.user_id, "title": "New Chat"},
-                    )
-                    st.session_state.conversation_id = new_conv["conversation_id"]
-                    st.session_state.messages = []
-                    st.session_state.conversations.insert(0, new_conv)
-                    st.rerun()
-                except Exception as exc:
-                    st.error(str(exc))
+            if st.session_state.user_id and db:
+                new_conv = db.create_conversation(st.session_state.user_id, "New Chat")
+                st.session_state.conversation_id = new_conv["conversation_id"]
+                st.session_state.messages = []
+                st.session_state.conversations.insert(0, new_conv)
+                st.rerun()
 
     if st.session_state.username:
         st.markdown(
@@ -280,11 +248,8 @@ with st.sidebar:
                 type="primary" if is_active else "secondary",
             ):
                 st.session_state.conversation_id = conv["conversation_id"]
-                try:
-                    msgs = api_get(f"/messages/{conv['conversation_id']}")
-                    st.session_state.messages = msgs
-                except Exception:
-                    st.session_state.messages = []
+                if db:
+                    st.session_state.messages = db.get_messages(conv["conversation_id"])
                 st.rerun()
 
     st.divider()
@@ -293,7 +258,7 @@ with st.sidebar:
     use_web = st.toggle(
         "Auto-search for current affairs",
         value=st.session_state.use_web_search,
-        help="Automatically browses the internet for news, latest events, and time-sensitive questions.",
+        help="Automatically browses the internet for news and time-sensitive questions.",
     )
     st.session_state.use_web_search = use_web
 
@@ -305,16 +270,15 @@ with st.sidebar:
         label_visibility="collapsed",
         key="doc_uploader",
     )
-    if uploaded_doc and st.session_state.user_id:
+    if uploaded_doc and st.session_state.user_id and rag_engine:
         if st.button("Index Document", use_container_width=True):
             with st.spinner("Indexing…"):
                 try:
-                    result = api_upload(
-                        uploaded_doc.read(),
-                        uploaded_doc.name,
-                        st.session_state.user_id,
+                    data = uploaded_doc.read()
+                    chunks = rag_engine.ingestion.ingest_bytes(
+                        data, uploaded_doc.name, st.session_state.user_id
                     )
-                    st.success(result["message"])
+                    st.success(f"Indexed {chunks} chunks from {uploaded_doc.name}")
                 except Exception as exc:
                     st.error(str(exc))
 
@@ -325,6 +289,7 @@ with st.sidebar:
     )
 
 
+# ── Main chat area ────────────────────────────────────────────────────────────
 if not st.session_state.user_id:
     st.markdown(
         """
@@ -362,7 +327,7 @@ for msg in st.session_state.messages:
             unsafe_allow_html=True,
         )
 
-# Image attachment for current message
+# Image attachment
 col_img, col_clear = st.columns([4, 1])
 with col_img:
     chat_image = st.file_uploader(
@@ -382,12 +347,28 @@ if chat_image:
 # Chat input
 user_input = st.chat_input("Message RAG Chatbot…")
 
-if user_input and st.session_state.conversation_id:
+if user_input and st.session_state.conversation_id and rag_engine and db:
     image_b64 = None
+    image_path = None
     if st.session_state.pending_image:
         image_b64 = image_to_base64(st.session_state.pending_image)
+        img_data = base64.b64decode(image_b64)
+        image_path = str(settings.uploads_path / f"{uuid.uuid4().hex}_chat_image.png")
+        with open(image_path, "wb") as f:
+            f.write(img_data)
 
-    # Show user message immediately
+    db.add_message(
+        st.session_state.conversation_id,
+        "user",
+        user_input,
+        image_path,
+    )
+
+    msgs = db.get_messages(st.session_state.conversation_id)
+    if len(msgs) == 1:
+        title = user_input[:48] + ("..." if len(user_input) > 48 else "")
+        db.update_conversation_title(st.session_state.conversation_id, title)
+
     st.markdown(
         f'<div class="role-label">You</div>'
         f'<div class="user-bubble">{user_input}</div>',
@@ -398,19 +379,22 @@ if user_input and st.session_state.conversation_id:
 
     with st.spinner("Searching the web & thinking…" if st.session_state.get("use_web_search") else "Thinking…"):
         try:
-            response = api_post(
-                "/chat",
-                {
-                    "user_id": st.session_state.user_id,
-                    "conversation_id": st.session_state.conversation_id,
-                    "message": user_input,
-                    "image_base64": image_b64,
-                    "use_web_search": None if st.session_state.get("use_web_search") else False,
-                },
+            result = rag_engine.chat(
+                user_id=st.session_state.user_id,
+                conversation_id=st.session_state.conversation_id,
+                message=user_input,
+                image_base64=image_b64,
+                use_web_search=None if st.session_state.get("use_web_search") else False,
             )
-            reply = response["reply"]
-            sources = response.get("sources", [])
-            web_sources = response.get("web_sources", [])
+            reply = result["reply"]
+            sources = result.get("sources", [])
+            web_sources = result.get("web_sources", [])
+
+            db.add_message(
+                st.session_state.conversation_id,
+                "assistant",
+                reply,
+            )
 
             st.markdown(
                 f'<div class="role-label assistant-label">Assistant</div>'
@@ -434,16 +418,11 @@ if user_input and st.session_state.conversation_id:
                     unsafe_allow_html=True,
                 )
 
-            # Refresh state from backend
-            msgs = api_get(f"/messages/{st.session_state.conversation_id}")
-            st.session_state.messages = msgs
-            convs = api_get(f"/conversations/{st.session_state.user_id}")
-            st.session_state.conversations = convs
+            st.session_state.messages = db.get_messages(st.session_state.conversation_id)
+            st.session_state.conversations = db.list_conversations(st.session_state.user_id)
             st.session_state.pending_image = None
             st.session_state.pending_image_name = None
             st.rerun()
 
-        except httpx.ConnectError:
-            st.error("Cannot reach backend. Make sure FastAPI is running on port 8000.")
         except Exception as exc:
             st.error(f"Error: {exc}")
