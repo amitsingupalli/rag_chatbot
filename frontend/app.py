@@ -8,6 +8,14 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 
+import sys
+from pathlib import Path
+
+# Add project root directory to sys.path so Streamlit Cloud can find 'backend'
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 import streamlit as st
 from PIL import Image
 
