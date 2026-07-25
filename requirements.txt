@@ -1,0 +1,37 @@
+# Core
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+streamlit>=1.40.0
+python-multipart>=0.0.12
+pydantic>=2.9.0
+pydantic-settings>=2.6.0
+httpx>=0.27.0
+python-dotenv>=1.0.0
+
+# LlamaIndex
+llama-index>=0.12.0
+llama-index-core>=0.12.0
+llama-index-llms-groq>=0.3.0
+llama-index-llms-openai>=0.3.0
+llama-index-embeddings-huggingface>=0.4.0
+llama-index-vector-stores-chroma>=0.4.0
+llama-index-retrievers-bm25>=0.4.0
+
+# RAG enhancements
+chromadb>=0.5.0
+sentence-transformers>=3.0.0
+rank-bm25>=0.2.2
+
+# Multimodal / OCR
+Pillow>=10.0.0
+pytesseract>=0.3.10
+pdf2image>=1.17.0
+pypdf>=5.0.0
+python-docx>=1.1.0
+
+# Database
+aiosqlite>=0.20.0
+
+# Web search
+duckduckgo-search>=6.0.0
+beautifulsoup4>=4.12.0
