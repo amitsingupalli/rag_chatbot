@@ -13,7 +13,10 @@ from llama_index.core.indices.query.query_transform.base import (
 from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.retrievers import QueryFusionRetriever
-from llama_index.core.llms import ChatMessage, MessageRole
+try:
+    from llama_index.core.llms import ChatMessage, MessageRole
+except ImportError:
+    from llama_index.core.schema import ChatMessage, MessageRole
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.groq import Groq
 
