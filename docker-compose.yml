@@ -11,5 +11,5 @@ services:
       # Keeps user uploaded data & vector database persistent on their laptop
       - ./data:/app/data
     env_file:
-      - .env.example
+      - .env
     restart: unless-stopped
