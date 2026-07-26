@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   rag-chatbot:
     build: .
@@ -10,6 +8,10 @@ services:
     volumes:
       # Keeps user uploaded data & vector database persistent on their laptop
       - ./data:/app/data
+      # Live code reloading (changes reflect immediately without rebuilding Docker)
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+      - ./Rag_Chatbot.py:/app/Rag_Chatbot.py
     env_file:
       - .env
     restart: unless-stopped
