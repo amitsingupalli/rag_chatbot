@@ -1,4 +1,4 @@
-# 🤖 Advanced RAG Chatbot
+#  Advanced RAG Chatbot
 
 An intelligent, full-stack Retrieval-Augmented Generation (RAG) system built with **FastAPI**, **Streamlit**, **LlamaIndex**, and **Groq**. 
 
