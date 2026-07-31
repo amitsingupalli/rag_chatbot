@@ -61,24 +61,51 @@ class IngestionPipeline:
         return len(docs)
 
     def ingest_pdf(self, file_path: Path, user_id: str | None = None) -> int:
-        from pypdf import PdfReader
-
-        reader = PdfReader(str(file_path))
         pages = []
-        for i, page in enumerate(reader.pages):
-            page_text = page.extract_text() or ""
-            if page_text.strip():
-                pages.append(
-                    Document(
-                        text=page_text,
-                        metadata={
-                            "source": file_path.name,
-                            "page": i + 1,
-                            "type": "pdf",
-                            "user_id": user_id or "global",
-                        },
-                    )
+        if settings.llama_cloud_api_key:
+            try:
+                from llama_parse import LlamaParse
+
+                parser = LlamaParse(
+                    api_key=settings.llama_cloud_api_key,
+                    result_type="markdown",
+                    verbose=False,
                 )
+                parsed_docs = parser.load_data(str(file_path))
+                for i, pdoc in enumerate(parsed_docs):
+                    if pdoc.text and pdoc.text.strip():
+                        pages.append(
+                            Document(
+                                text=pdoc.text,
+                                metadata={
+                                    "source": file_path.name,
+                                    "page": i + 1,
+                                    "type": "pdf_llamaparse",
+                                    "user_id": user_id or "global",
+                                },
+                            )
+                        )
+            except Exception as exc:
+                print(f"[Warning] LlamaParse failed: {exc}. Falling back to PyPDF.")
+
+        if not pages:
+            from pypdf import PdfReader
+
+            reader = PdfReader(str(file_path))
+            for i, page in enumerate(reader.pages):
+                page_text = page.extract_text() or ""
+                if page_text.strip():
+                    pages.append(
+                        Document(
+                            text=page_text,
+                            metadata={
+                                "source": file_path.name,
+                                "page": i + 1,
+                                "type": "pdf",
+                                "user_id": user_id or "global",
+                            },
+                        )
+                    )
         if not pages:
             return 0
         nodes = self._splitter.get_nodes_from_documents(pages)

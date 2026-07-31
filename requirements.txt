@@ -16,6 +16,7 @@ llama-index-llms-openai==0.3.0
 llama-index-embeddings-huggingface==0.4.0
 llama-index-vector-stores-chroma==0.4.0
 llama-index-retrievers-bm25>=0.4.0
+llama-parse>=0.5.0
 
 # RAG enhancements
 chromadb>=0.5.0

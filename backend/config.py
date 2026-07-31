@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     groq_api_key: str | None = None
     groq_model: str = "llama-3.3-70b-versatile"
+    llama_cloud_api_key: str | None = None
 
     embedding_provider: str = "huggingface"
     embedding_model: str = "BAAI/bge-small-en-v1.5"
