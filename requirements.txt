@@ -29,6 +29,7 @@ pytesseract>=0.3.10
 pdf2image>=1.17.0
 pypdf>=5.0.0
 python-docx>=1.1.0
+python-pptx>=0.6.23
 
 # Database
 aiosqlite>=0.20.0

@@ -273,8 +273,8 @@ with st.sidebar:
     st.divider()
     st.markdown("**Upload Documents**")
     uploaded_doc = st.file_uploader(
-        "PDF, TXT, MD, Images",
-        type=["pdf", "txt", "md", "csv", "png", "jpg", "jpeg", "webp"],
+        "PDF, CSV, PPT, PPTX, TXT, MD, Images",
+        type=["pdf", "csv", "ppt", "pptx", "txt", "md", "json", "tsv", "png", "jpg", "jpeg", "webp"],
         label_visibility="collapsed",
         key="doc_uploader",
     )

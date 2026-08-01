@@ -139,14 +139,96 @@ class IngestionPipeline:
         )
         return len(docs)
 
+    def ingest_pptx(self, file_path: Path, user_id: str | None = None) -> int:
+        slides = []
+        if settings.llama_cloud_api_key:
+            try:
+                from llama_parse import LlamaParse
+
+                parser = LlamaParse(
+                    api_key=settings.llama_cloud_api_key,
+                    result_type="markdown",
+                    verbose=False,
+                )
+                parsed_docs = parser.load_data(str(file_path))
+                for i, pdoc in enumerate(parsed_docs):
+                    if pdoc.text and pdoc.text.strip():
+                        slides.append(
+                            Document(
+                                text=pdoc.text,
+                                metadata={
+                                    "source": file_path.name,
+                                    "page": i + 1,
+                                    "type": "pptx_llamaparse",
+                                    "user_id": user_id or "global",
+                                },
+                            )
+                        )
+            except Exception as exc:
+                print(f"[Warning] LlamaParse PPTX failed: {exc}. Falling back to python-pptx.")
+
+        if not slides:
+            try:
+                from pptx import Presentation
+
+                prs = Presentation(str(file_path))
+                for i, slide in enumerate(prs.slides):
+                    slide_text_parts = []
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text") and shape.text:
+                            slide_text_parts.append(shape.text)
+                    slide_text = "\n".join(slide_text_parts)
+                    if slide_text.strip():
+                        slides.append(
+                            Document(
+                                text=slide_text,
+                                metadata={
+                                    "source": file_path.name,
+                                    "page": i + 1,
+                                    "type": "pptx",
+                                    "user_id": user_id or "global",
+                                },
+                            )
+                        )
+            except Exception as exc:
+                print(f"[Warning] python-pptx parsing failed: {exc}")
+
+        if not slides:
+            return 0
+        nodes = self._splitter.get_nodes_from_documents(slides)
+        docs = [Document(text=n.get_content(), metadata=n.metadata) for n in nodes]
+        VectorStoreIndex.from_documents(
+            docs,
+            storage_context=self._storage_context,
+            show_progress=False,
+        )
+        return len(docs)
+
+    def ingest_csv(self, file_path: Path, user_id: str | None = None) -> int:
+        text = file_path.read_text(encoding="utf-8", errors="ignore")
+        metadata = {
+            "source": file_path.name,
+            "type": "csv",
+            "user_id": user_id or "global",
+        }
+        docs = self._build_documents_from_text(text, metadata)
+        VectorStoreIndex.from_documents(
+            docs,
+            storage_context=self._storage_context,
+            show_progress=False,
+        )
+        return len(docs)
+
     def ingest_file(self, file_path: Path, user_id: str | None = None) -> int:
         suffix = file_path.suffix.lower()
         if suffix in SUPPORTED_IMAGE_TYPES:
             return self.ingest_image(file_path, user_id)
         if suffix == ".pdf":
             return self.ingest_pdf(file_path, user_id)
-        if suffix in {".txt", ".md", ".csv", ".json"}:
-            return self.ingest_text_file(file_path, user_id)
+        if suffix in {".ppt", ".pptx"}:
+            return self.ingest_pptx(file_path, user_id)
+        if suffix in {".txt", ".md", ".csv", ".json", ".tsv"}:
+            return self.ingest_csv(file_path, user_id) if suffix == ".csv" else self.ingest_text_file(file_path, user_id)
         raise ValueError(f"Unsupported file type: {suffix}")
 
     def ingest_bytes(
