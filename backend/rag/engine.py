@@ -25,15 +25,12 @@ from backend.db.database import Database
 from backend.rag.ingestion import IngestionPipeline
 from backend.rag.memory import PersistentMemory
 from backend.rag.ocr import process_image_base64
-from backend.rag.web_search import search_web, should_search_web
 
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are a helpful, precise AI assistant powered by an Advanced RAG system.
-Use the provided context, live web search results (when available), and conversation history.
-For current affairs, news, or time-sensitive questions, prioritize live web search results.
-Cite sources when using web results (mention site names or URLs).
-If neither local documents nor web results contain enough information, say so clearly.
+Use the provided context from indexed documents and conversation history to answer questions accurately.
+If local documents do not contain enough information to answer the question, state that clearly based on the provided document context.
 When image OCR text is provided, analyze it carefully and reference specific details.
 Be concise but thorough. Format responses with markdown when helpful."""
 
@@ -123,8 +120,9 @@ class AdvancedRAGEngine:
             sub_queries = transformed if isinstance(transformed, list) else [query]
 
             all_nodes = []
+            from llama_index.core.schema import QueryBundle
             for sub_q in sub_queries[:3]:
-                response = self.query_engine.retrieve(str(sub_q))
+                response = self.query_engine.retrieve(QueryBundle(str(sub_q)))
                 all_nodes.extend(response)
 
             seen: set[str] = set()
@@ -151,7 +149,6 @@ class AdvancedRAGEngine:
         conversation_id: str,
         message: str,
         image_base64: str | None = None,
-        use_web_search: bool | None = None,
     ) -> dict[str, Any]:
         enriched_message = message
         if image_base64:
@@ -162,12 +159,6 @@ class AdvancedRAGEngine:
 
         user_memory = self.memory.get_context(user_id)
         rag_context, sources = self._retrieve_context(enriched_message)
-
-        web_context = ""
-        web_sources: list[str] = []
-        used_web_search = should_search_web(message, force=use_web_search)
-        if used_web_search:
-            web_context, web_sources = search_web(enriched_message)
 
         history = self._build_chat_history(conversation_id)
 
@@ -188,8 +179,6 @@ Conversation history:
 Retrieved knowledge base context:
 {rag_context or '(no relevant documents found)'}
 
-{web_context or '(no web search performed)'}
-
 User question:
 {enriched_message}
 
@@ -206,6 +195,4 @@ Provide a helpful answer:"""
         return {
             "reply": reply,
             "sources": sources,
-            "web_sources": web_sources,
-            "used_web_search": used_web_search,
         }

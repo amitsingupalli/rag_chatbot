@@ -1,5 +1,3 @@
-"""RAG Chatbot Application — Fullstack Streamlit App."""
-
 from __future__ import annotations
 
 import base64
@@ -23,6 +21,13 @@ from backend.config import settings
 from backend.db.database import Database
 from backend.rag.engine import AdvancedRAGEngine
 
+st.set_page_config(
+    page_title="RAG Chatbot",
+    page_icon="✦",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 # ── Initialize Database & RAG Engine ──────────────────────────────────────────
 @st.cache_resource
 def get_db_and_engine():
@@ -36,15 +41,11 @@ def get_db_and_engine():
     return db, engine
 
 try:
-    db, rag_engine = get_db_and_engine()
+    with st.spinner("Initializing models and storage…"):
+        db, rag_engine = get_db_and_engine()
 except Exception as e:
     st.error(f"Error initializing RAG Engine: {e}")
     db, rag_engine = None, None
-
-st.set_page_config(
-    page_title="RAG Chatbot",
-    page_icon="✦",
-    layout="wide",
     initial_sidebar_state="expanded",
 )
 
@@ -385,18 +386,16 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
     if st.session_state.pending_image:
         st.image(st.session_state.pending_image, width=300)
 
-    with st.spinner("Searching the web & thinking…" if st.session_state.get("use_web_search") else "Thinking…"):
+    with st.spinner("Thinking…"):
         try:
             result = rag_engine.chat(
                 user_id=st.session_state.user_id,
                 conversation_id=st.session_state.conversation_id,
                 message=user_input,
                 image_base64=image_b64,
-                use_web_search=None if st.session_state.get("use_web_search") else False,
             )
             reply = result["reply"]
             sources = result.get("sources", [])
-            web_sources = result.get("web_sources", [])
 
             db.add_message(
                 st.session_state.conversation_id,
@@ -414,15 +413,7 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
                     f'<span class="source-badge">{s}</span>' for s in sources[:5]
                 )
                 st.markdown(
-                    f"<div style='margin:4px 0 4px 0'><small style='color:#888'>Documents:</small> {badges}</div>",
-                    unsafe_allow_html=True,
-                )
-            if web_sources:
-                web_badges = " ".join(
-                    f'<span class="web-source-badge">{s}</span>' for s in web_sources[:5]
-                )
-                st.markdown(
-                    f"<div style='margin:4px 0 16px 0'><small style='color:#8bc48b'>Web:</small> {web_badges}</div>",
+                    f"<div style='margin:4px 0 16px 0'><small style='color:#888'>Documents:</small> {badges}</div>",
                     unsafe_allow_html=True,
                 )
 

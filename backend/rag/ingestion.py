@@ -22,10 +22,18 @@ class IngestionPipeline:
         settings.uploads_path.mkdir(parents=True, exist_ok=True)
         settings.chroma_path.mkdir(parents=True, exist_ok=True)
 
-        self._chroma_client = chromadb.PersistentClient(path=str(settings.chroma_path))
+        from chromadb.api.client import SharedSystemClient
+        SharedSystemClient.clear_system_cache()
+        self._chroma_client = chromadb.PersistentClient(
+            path=str(settings.chroma_path),
+            tenant="default_tenant",
+            database="default_database",
+        )
         self._collection = self._chroma_client.get_or_create_collection("rag_documents")
         self._vector_store = ChromaVectorStore(chroma_collection=self._collection)
         self._storage_context = StorageContext.from_defaults(vector_store=self._vector_store)
+        from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+        Settings.embed_model = HuggingFaceEmbedding(model_name=settings.embedding_model)
         self._splitter = SentenceSplitter(
             chunk_size=settings.chunk_size,
             chunk_overlap=settings.chunk_overlap,
@@ -219,7 +227,8 @@ class IngestionPipeline:
         )
         return len(docs)
 
-    def ingest_file(self, file_path: Path, user_id: str | None = None) -> int:
+    def ingest_file(self, file_path: str | Path, user_id: str | None = None) -> int:
+        file_path = Path(file_path)
         suffix = file_path.suffix.lower()
         if suffix in SUPPORTED_IMAGE_TYPES:
             return self.ingest_image(file_path, user_id)

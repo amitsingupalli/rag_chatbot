@@ -18,8 +18,6 @@ def main() -> None:
             "streamlit",
             "run",
             str(ROOT / "frontend" / "app.py"),
-            "--server.port",
-            "8501",
         ],
         cwd=ROOT,
         env={**os.environ, "PYTHONPATH": str(ROOT)},
