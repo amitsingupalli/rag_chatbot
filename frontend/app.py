@@ -22,14 +22,14 @@ from backend.db.database import Database
 from backend.rag.engine import AdvancedRAGEngine
 
 st.set_page_config(
-    page_title="RAG Chatbot",
+    page_title="Assistant",
     page_icon="✦",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ── Initialize Database & RAG Engine ──────────────────────────────────────────
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def get_db_and_engine():
     settings.data_path.mkdir(parents=True, exist_ok=True)
     settings.storage_path.mkdir(parents=True, exist_ok=True)
@@ -41,79 +41,133 @@ def get_db_and_engine():
     return db, engine
 
 try:
-    with st.spinner("Initializing models and storage…"):
-        db, rag_engine = get_db_and_engine()
+    db, rag_engine = get_db_and_engine()
 except Exception as e:
     st.error(f"Error initializing RAG Engine: {e}")
     db, rag_engine = None, None
-    initial_sidebar_state="expanded",
-)
 
-# ── Styling ───────────────────────────────────────────────────────────────────
+# ── Styling (Claude Theme & Categorized Popover Attachment) ───────────────────
 st.markdown(
     """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
 html, body, [class*="css"] {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #18181b !important;
+    color: #e4e4e7 !important;
 }
 
-#MainMenu, footer, header { visibility: hidden; }
+#MainMenu, footer { visibility: hidden; }
+header { background: transparent !important; }
+
+/* Keep sidebar toggle controls visible at all times */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="stSidebarCollapseButton"],
+button[aria-label="Expand sidebar"],
+button[aria-label="Collapse sidebar"] {
+    visibility: visible !important;
+    display: flex !important;
+    color: #d97757 !important;
+    background: #27272a !important;
+    border: 1px solid #3f3f46 !important;
+    border-radius: 8px !important;
+    z-index: 999999 !important;
+}
+
+[data-testid="stSidebarCollapsedControl"]:hover,
+[data-testid="stSidebarCollapseButton"]:hover {
+    background: #3f3f46 !important;
+    color: #ffffff !important;
+}
 
 .block-container {
-    padding-top: 1rem;
-    padding-bottom: 6rem;
-    max-width: 820px;
+    padding-top: 2rem;
+    padding-bottom: 7rem;
+    max-width: 840px;
 }
 
-/* Sidebar */
+/* Sidebar Styling (Claude Minimal) */
 section[data-testid="stSidebar"] {
-    background: #1a1a1a;
-    border-right: 1px solid #2e2e2e;
+    background: #1f1f23 !important;
+    border-right: 1px solid #27272a !important;
 }
 section[data-testid="stSidebar"] .stMarkdown,
 section[data-testid="stSidebar"] label,
-section[data-testid="stSidebar"] p {
-    color: #e8e8e8 !important;
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] span {
+    color: #d4d4d8 !important;
+}
+
+/* Hide file uploader instructions (200MB per file...) */
+[data-testid="stFileUploaderDropzoneInstructions"],
+[data-testid="stFileUploadDropzone"] small,
+.stFileUploader small {
+    display: none !important;
 }
 
 /* Chat bubbles */
 .user-bubble {
-    background: #2d2d2d;
-    border-radius: 18px 18px 4px 18px;
+    background: #27272a;
+    border: 1px solid #3f3f46;
+    border-radius: 16px 16px 4px 16px;
     padding: 14px 18px;
-    margin: 8px 0 8px 60px;
-    color: #f0f0f0;
+    margin: 8px 0 12px 48px;
+    color: #f4f4f5;
     font-size: 15px;
-    line-height: 1.6;
+    line-height: 1.65;
 }
+
 .assistant-bubble {
     background: transparent;
-    border-radius: 4px 18px 18px 18px;
-    padding: 14px 18px;
-    margin: 8px 60px 8px 0;
-    color: #e8e8e8;
+    border-radius: 4px 16px 16px 16px;
+    padding: 14px 18px 14px 0px;
+    margin: 8px 48px 12px 0;
+    color: #e4e4e7;
     font-size: 15px;
-    line-height: 1.6;
-    border-left: 2px solid #d97757;
-    padding-left: 16px;
+    line-height: 1.65;
 }
+
 .role-label {
     font-size: 12px;
     font-weight: 600;
-    color: #888;
+    color: #a1a1aa;
     margin-bottom: 4px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
 .assistant-label { color: #d97757; }
 
+/* Claude Chat Attachment '+' Popover Button */
+div[data-testid="stPopover"] > button {
+    border-radius: 50% !important;
+    width: 42px !important;
+    height: 42px !important;
+    padding: 0 !important;
+    margin-top: 4px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #27272a !important;
+    border: 1px solid #3f3f46 !important;
+    color: #e4e4e7 !important;
+    font-size: 20px !important;
+    font-weight: 400 !important;
+    transition: all 0.2s !important;
+}
+
+div[data-testid="stPopover"] > button:hover {
+    background: #3f3f46 !important;
+    color: #ffffff !important;
+    border-color: #d97757 !important;
+}
+
 /* Input area */
 .stChatInput > div {
-    border-radius: 24px !important;
-    border: 1px solid #3a3a3a !important;
-    background: #1e1e1e !important;
+    border-radius: 16px !important;
+    border: 1px solid #3f3f46 !important;
+    background: #27272a !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
 }
 
 /* Buttons */
@@ -135,23 +189,35 @@ section[data-testid="stSidebar"] p {
 /* Sources badge */
 .source-badge {
     display: inline-block;
-    background: #2a2a2a;
-    border: 1px solid #444;
-    border-radius: 12px;
-    padding: 2px 10px;
-    font-size: 11px;
-    color: #aaa;
+    background: #27272a;
+    border: 1px solid #3f3f46;
+    border-radius: 8px;
+    padding: 3px 10px;
+    font-size: 12px;
+    color: #a1a1aa;
     margin: 2px;
 }
 .web-source-badge {
     display: inline-block;
-    background: #1a2a1a;
-    border: 1px solid #3a5a3a;
-    border-radius: 12px;
-    padding: 2px 10px;
-    font-size: 11px;
-    color: #8bc48b;
+    background: #1c2b1e;
+    border: 1px solid #2d4731;
+    border-radius: 8px;
+    padding: 3px 10px;
+    font-size: 12px;
+    color: #a3e635;
     margin: 2px;
+}
+
+.attached-file-chip {
+    display: inline-flex;
+    align-items: center;
+    background: #27272a;
+    border: 1px solid #d97757;
+    border-radius: 12px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: #f4f4f5;
+    margin-bottom: 8px;
 }
 
 .stDeployButton { display: none; }
@@ -176,6 +242,7 @@ def init_state():
         "conversations": [],
         "pending_image": None,
         "pending_image_name": None,
+        "pending_doc_name": None,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -187,13 +254,6 @@ init_state()
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### ✦ RAG Chatbot")
-    st.markdown(
-        "<p style='color:#888;font-size:12px;margin-top:-10px'>Advanced Multimodal RAG</p>",
-        unsafe_allow_html=True,
-    )
-    st.divider()
-
     username_input = st.text_input(
         "Your name",
         value=st.session_state.username or "",
@@ -238,7 +298,7 @@ with st.sidebar:
 
     if st.session_state.username:
         st.markdown(
-            f"<p style='color:#888;font-size:12px'>Signed in as "
+            f"<p style='color:#a1a1aa;font-size:12px;margin-top:6px'>Signed in as "
             f"<b style='color:#d97757'>{st.session_state.username}</b></p>",
             unsafe_allow_html=True,
         )
@@ -280,33 +340,31 @@ with st.sidebar:
         key="doc_uploader",
     )
     if uploaded_doc and st.session_state.user_id and rag_engine:
-        if st.button("Index Document", use_container_width=True):
-            with st.spinner("Indexing…"):
+        file_key = f"{uploaded_doc.name}_{uploaded_doc.size}"
+        if st.session_state.get("last_indexed_file") != file_key:
+            with st.spinner(f"Indexing {uploaded_doc.name}…"):
                 try:
                     data = uploaded_doc.read()
                     chunks = rag_engine.ingestion.ingest_bytes(
                         data, uploaded_doc.name, st.session_state.user_id
                     )
+                    st.session_state["last_indexed_file"] = file_key
                     st.success(f"Indexed {chunks} chunks from {uploaded_doc.name}")
                 except Exception as exc:
-                    st.error(str(exc))
-
-    st.divider()
-    st.markdown(
-        "<p style='color:#555;font-size:11px'>Powered by LlamaIndex + Groq</p>",
-        unsafe_allow_html=True,
-    )
+                    st.error(f"Error indexing {uploaded_doc.name}: {exc}")
+        else:
+            st.success(f"Indexed & ready: {uploaded_doc.name}")
 
 
 # ── Main chat area ────────────────────────────────────────────────────────────
 if not st.session_state.user_id:
     st.markdown(
         """
-        <div style="text-align:center;padding:80px 20px">
-            <h1 style="color:#d97757;font-size:2.5rem;font-weight:600">✦ RAG Chatbot</h1>
-            <p style="color:#888;font-size:16px;margin-top:12px">
-                Advanced Multimodal RAG with persistent memory<br>
-                Enter your username in the sidebar to begin
+        <div style="text-align:center;padding:100px 20px">
+            <h1 style="color:#d97757;font-size:2.8rem;font-weight:600;letter-spacing:-0.02em">✦ Assistant</h1>
+            <p style="color:#a1a1aa;font-size:16px;margin-top:14px">
+                Upload documents (PDF, PPT, CSV, Images) or chat directly.<br>
+                Please enter your username in the sidebar to start.
             </p>
         </div>
         """,
@@ -336,25 +394,64 @@ for msg in st.session_state.messages:
             unsafe_allow_html=True,
         )
 
-# Image attachment
-col_img, col_clear = st.columns([4, 1])
-with col_img:
-    chat_image = st.file_uploader(
-        "Attach image (OCR enabled)",
-        type=["png", "jpg", "jpeg", "webp"],
-        label_visibility="collapsed",
-        key="chat_image_uploader",
+# Display attached file chip if present
+if st.session_state.get("pending_doc_name"):
+    st.markdown(
+        f'<div class="attached-file-chip">📄 {st.session_state.pending_doc_name} &nbsp; <small style="color:#a3e635">(Indexed & Ready)</small></div>',
+        unsafe_allow_html=True,
     )
-with col_clear:
-    if chat_image:
-        st.image(chat_image, width=80)
+elif st.session_state.get("pending_image_name"):
+    st.markdown(
+        f'<div class="attached-file-chip">🖼️ {st.session_state.pending_image_name} &nbsp; <small style="color:#a3e635">(Image Ready)</small></div>',
+        unsafe_allow_html=True,
+    )
 
-if chat_image:
-    st.session_state.pending_image = Image.open(chat_image).convert("RGB")
-    st.session_state.pending_image_name = chat_image.name
+# Claude-Style Bottom Attachment Bar with 2 Categorized Sections
+attach_col, input_col = st.columns([1, 12])
 
-# Chat input
-user_input = st.chat_input("Message RAG Chatbot…")
+with attach_col:
+    with st.popover("+", help="Attach document or image"):
+        st.markdown("<p style='font-size:13px;font-weight:600;color:#e4e4e7;margin-bottom:6px'>Add Attachment</p>", unsafe_allow_html=True)
+        tab_doc, tab_img = st.tabs(["📄 Document", "🖼️ Image"])
+
+        with tab_doc:
+            doc_file = st.file_uploader(
+                "Upload Document",
+                type=["pdf", "csv", "ppt", "pptx", "txt", "md", "json", "tsv"],
+                label_visibility="collapsed",
+                key="chat_doc_uploader_segmented",
+            )
+            if doc_file and rag_engine and st.session_state.user_id:
+                file_key = f"doc_{doc_file.name}_{doc_file.size}"
+                if st.session_state.get("last_indexed_chat_file") != file_key:
+                    with st.spinner(f"Indexing {doc_file.name}…"):
+                        try:
+                            data = doc_file.read()
+                            chunks = rag_engine.ingestion.ingest_bytes(
+                                data, doc_file.name, st.session_state.user_id
+                            )
+                            st.session_state["last_indexed_chat_file"] = file_key
+                            st.session_state.pending_doc_name = doc_file.name
+                            st.caption(f"✓ Indexed {chunks} chunks from {doc_file.name}")
+                        except Exception as exc:
+                            st.error(f"Error indexing {doc_file.name}: {exc}")
+                else:
+                    st.caption(f"✓ {doc_file.name} ready")
+
+        with tab_img:
+            img_file = st.file_uploader(
+                "Upload Image",
+                type=["png", "jpg", "jpeg", "webp"],
+                label_visibility="collapsed",
+                key="chat_img_uploader_segmented",
+            )
+            if img_file:
+                st.session_state.pending_image = Image.open(img_file).convert("RGB")
+                st.session_state.pending_image_name = img_file.name
+                st.caption(f"✓ Image ready: {img_file.name}")
+
+with input_col:
+    user_input = st.chat_input("Write a message…")
 
 if user_input and st.session_state.conversation_id and rag_engine and db:
     image_b64 = None
@@ -393,9 +490,11 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
                 conversation_id=st.session_state.conversation_id,
                 message=user_input,
                 image_base64=image_b64,
+                use_web_search=st.session_state.get("use_web_search", True),
             )
             reply = result["reply"]
             sources = result.get("sources", [])
+            web_sources = result.get("web_sources", [])
 
             db.add_message(
                 st.session_state.conversation_id,
@@ -416,11 +515,20 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
                     f"<div style='margin:4px 0 16px 0'><small style='color:#888'>Documents:</small> {badges}</div>",
                     unsafe_allow_html=True,
                 )
+            if web_sources:
+                w_badges = " ".join(
+                    f'<span class="web-source-badge">{s}</span>' for s in web_sources[:5]
+                )
+                st.markdown(
+                    f"<div style='margin:4px 0 16px 0'><small style='color:#888'>Web Sources:</small> {w_badges}</div>",
+                    unsafe_allow_html=True,
+                )
 
             st.session_state.messages = db.get_messages(st.session_state.conversation_id)
             st.session_state.conversations = db.list_conversations(st.session_state.user_id)
             st.session_state.pending_image = None
             st.session_state.pending_image_name = None
+            st.session_state.pending_doc_name = None
             st.rerun()
 
         except Exception as exc:

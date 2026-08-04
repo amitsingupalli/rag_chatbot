@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import urllib.parse
 from dataclasses import dataclass
 from html import unescape
 from urllib.parse import urlparse
@@ -47,6 +48,13 @@ CURRENT_AFFAIRS_KEYWORDS = (
     "google",
     "current affairs",
     "as of now",
+    "web_search",
+    "web search",
+    "do search",
+    "search online",
+    "agentic ai",
+    "agentic",
+    "ai",
 )
 
 EXPLICIT_SEARCH_PHRASES = (
@@ -58,6 +66,9 @@ EXPLICIT_SEARCH_PHRASES = (
     "check online",
     "what is happening",
     "what happened",
+    "web_search",
+    "web search",
+    "do the web",
 )
 
 
@@ -87,6 +98,19 @@ def should_search_web(message: str, force: bool | None = None) -> bool:
     return False
 
 
+def _clean_search_query(message: str) -> str:
+    cleaned = message.strip()
+    patterns = [
+        r"(?i)^(?:do\s+(?:a\s+|the\s+)?)?(?:web_search|web\s+search|internet\s+search|google\s+search)\s*(?:and\s*)?(?:tell\s+me\s+about\s*)?",
+        r"(?i)^(?:search\s+(?:the\s+web\s+for|for|online\s+for)|browse\s+for|look\s+up|find\s+online|check\s+online)\s*",
+        r"(?i)^(?:tell\s+me\s+about|what\s+is\s+meant\s+by|what\s+is|who\s+is|explain)\s*",
+        r"(?i)^(?:the|a|an)\s+",
+    ]
+    for p in patterns:
+        cleaned = re.sub(p, "", cleaned).strip()
+    return cleaned if len(cleaned) > 2 else message
+
+
 def _strip_html(text: str) -> str:
     text = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", text)
     text = re.sub(r"(?s)<.*?>", " ", text)
@@ -99,7 +123,7 @@ def _fetch_page_text(url: str, timeout: float = 8.0) -> str:
         with httpx.Client(
             timeout=timeout,
             follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; RAGChatbot/1.0)"},
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
         ) as client:
             response = client.get(url)
             response.raise_for_status()
@@ -110,24 +134,54 @@ def _fetch_page_text(url: str, timeout: float = 8.0) -> str:
         return ""
 
 
-def _search_duckduckgo(query: str, max_results: int) -> list[WebSearchResult]:
-    try:
-        from duckduckgo_search import DDGS
-    except ImportError as exc:
-        raise RuntimeError(
-            "duckduckgo-search is not installed. Run: pip install duckduckgo-search"
-        ) from exc
-
+def _search_duckduckgo_html(query: str, max_results: int = 5) -> list[WebSearchResult]:
+    url = "https://html.duckduckgo.com/html/"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     results: list[WebSearchResult] = []
-    with DDGS() as ddgs:
-        for item in ddgs.text(query, max_results=max_results):
-            results.append(
-                WebSearchResult(
-                    title=item.get("title", ""),
-                    url=item.get("href", item.get("link", "")),
-                    snippet=item.get("body", item.get("snippet", "")),
-                )
-            )
+    try:
+        resp = httpx.post(url, data={"q": query}, headers=headers, follow_redirects=True, timeout=10.0)
+        if resp.status_code == 200:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, "html.parser")
+            for result in soup.find_all("div", class_="result"):
+                title_elem = result.find("a", class_="result__a")
+                snippet_elem = result.find("a", class_="result__snippet")
+                if title_elem:
+                    title = title_elem.get_text(strip=True)
+                    link = title_elem.get("href", "")
+                    if "uddg=" in link:
+                        link = urllib.parse.unquote(link.split("uddg=")[1].split("&")[0])
+                    snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
+                    if title and link:
+                        results.append(WebSearchResult(title=title, url=link, snippet=snippet))
+                    if len(results) >= max_results:
+                        break
+    except Exception as exc:
+        logger.warning("DuckDuckGo HTML POST search failed: %s", exc)
+    return results
+
+
+def _search_duckduckgo(query: str, max_results: int) -> list[WebSearchResult]:
+    results = _search_duckduckgo_html(query, max_results=max_results)
+    if not results:
+        try:
+            try:
+                from duckduckgo_search import DDGS
+            except ImportError:
+                from ddgs import DDGS
+
+            with DDGS() as ddgs:
+                for item in ddgs.text(query, max_results=max_results):
+                    results.append(
+                        WebSearchResult(
+                            title=item.get("title", ""),
+                            url=item.get("href", item.get("link", "")),
+                            snippet=item.get("body", item.get("snippet", "")),
+                        )
+                    )
+        except Exception as exc:
+            logger.warning("DDGS API search fallback failed: %s", exc)
+
     return results
 
 
@@ -136,9 +190,11 @@ def search_web(query: str, max_results: int | None = None) -> tuple[str, list[st
     if not settings.web_search_enabled:
         return "", []
 
+    clean_q = _clean_search_query(query)
     max_results = max_results or settings.web_search_max_results
+
     try:
-        hits = _search_duckduckgo(query, max_results=max_results)
+        hits = _search_duckduckgo(clean_q, max_results=max_results)
     except Exception as exc:
         logger.warning("Web search failed: %s", exc)
         return f"[Web search unavailable: {exc}]", []
@@ -148,7 +204,7 @@ def search_web(query: str, max_results: int | None = None) -> tuple[str, list[st
 
     if settings.web_fetch_pages:
         for hit in hits[: settings.web_fetch_top_n]:
-            if hit.url:
+            if hit.url and hit.url.startswith("http"):
                 hit.body = _fetch_page_text(hit.url)
 
     blocks: list[str] = []
@@ -161,5 +217,5 @@ def search_web(query: str, max_results: int | None = None) -> tuple[str, list[st
             block += f"\nPage excerpt: {hit.body[:1500]}"
         blocks.append(block)
 
-    context = "Live web search results:\n\n" + "\n\n---\n\n".join(blocks)
+    context = f"Live web search results for '{clean_q}':\n\n" + "\n\n---\n\n".join(blocks)
     return context, list(dict.fromkeys(s for s in sources if s))

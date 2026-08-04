@@ -102,6 +102,18 @@ class IngestionPipeline:
             reader = PdfReader(str(file_path))
             for i, page in enumerate(reader.pages):
                 page_text = page.extract_text() or ""
+                if not page_text.strip() and hasattr(page, "images"):
+                    ocr_parts = []
+                    for img in page.images:
+                        try:
+                            res = process_image_bytes(img.data)
+                            if res.get("ocr_text") and not res["ocr_text"].startswith("[OCR"):
+                                ocr_parts.append(res["ocr_text"])
+                        except Exception:
+                            pass
+                    if ocr_parts:
+                        page_text = "\n".join(ocr_parts)
+
                 if page_text.strip():
                     pages.append(
                         Document(

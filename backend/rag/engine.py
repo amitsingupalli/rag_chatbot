@@ -25,6 +25,7 @@ from backend.db.database import Database
 from backend.rag.ingestion import IngestionPipeline
 from backend.rag.memory import PersistentMemory
 from backend.rag.ocr import process_image_base64
+from backend.rag.web_search import search_web, should_search_web
 
 logger = logging.getLogger(__name__)
 
@@ -116,14 +117,30 @@ class AdvancedRAGEngine:
 
     def _retrieve_context(self, query: str) -> tuple[str, list[str]]:
         try:
-            transformed = self.query_transform.run(query)
-            sub_queries = transformed if isinstance(transformed, list) else [query]
-
-            all_nodes = []
             from llama_index.core.schema import QueryBundle
-            for sub_q in sub_queries[:3]:
-                response = self.query_engine.retrieve(QueryBundle(str(sub_q)))
-                all_nodes.extend(response)
+            all_nodes = []
+
+            # 1. Retrieve directly with raw query first
+            try:
+                raw_nodes = self.query_engine.retrieve(QueryBundle(query))
+                all_nodes.extend(raw_nodes)
+            except Exception as exc:
+                logger.warning("Raw query retrieval error: %s", exc)
+
+            # 2. Check for overview / document summary intent
+            lower_q = query.lower()
+            is_summary_q = any(w in lower_q for w in ["pdf", "document", "file", "about", "summary", "overview", "detail", "what is", "explain"])
+
+            if not all_nodes or is_summary_q:
+                try:
+                    transformed = self.query_transform.run(query)
+                    sub_queries = transformed if isinstance(transformed, list) else []
+                    for sub_q in sub_queries[:2]:
+                        if str(sub_q).strip() != query.strip():
+                            sub_nodes = self.query_engine.retrieve(QueryBundle(str(sub_q)))
+                            all_nodes.extend(sub_nodes)
+                except Exception:
+                    pass
 
             seen: set[str] = set()
             sources: list[str] = []
@@ -137,7 +154,20 @@ class AdvancedRAGEngine:
                 sources.append(source)
                 chunks.append(node.node.get_content())
 
-            context = "\n\n---\n\n".join(chunks[: settings.rerank_top_n * 2])
+            # 3. Robust Fallback: Pull recent document nodes directly if overview asked or no chunks found
+            if not chunks or is_summary_q:
+                try:
+                    docs_map = self.ingestion.index.docstore.docs
+                    for d_id, d_node in list(docs_map.items())[-15:]:
+                        if d_id not in seen:
+                            seen.add(d_id)
+                            src = d_node.metadata.get("source", "uploaded_doc")
+                            sources.append(src)
+                            chunks.append(d_node.get_content())
+                except Exception as exc:
+                    logger.warning("Docstore fallback error: %s", exc)
+
+            context = "\n\n---\n\n".join(chunks[: settings.rerank_top_n * 4])
             return context, list(dict.fromkeys(sources))
         except Exception as exc:
             logger.warning("Retrieval failed: %s", exc)
@@ -149,6 +179,7 @@ class AdvancedRAGEngine:
         conversation_id: str,
         message: str,
         image_base64: str | None = None,
+        use_web_search: bool | None = None,
     ) -> dict[str, Any]:
         enriched_message = message
         if image_base64:
@@ -159,6 +190,17 @@ class AdvancedRAGEngine:
 
         user_memory = self.memory.get_context(user_id)
         rag_context, sources = self._retrieve_context(enriched_message)
+
+        web_context = ""
+        web_sources: list[str] = []
+        used_web = False
+        if use_web_search is not False and should_search_web(message, force=use_web_search):
+            try:
+                web_context, web_sources = search_web(message)
+                if web_context:
+                    used_web = True
+            except Exception as exc:
+                logger.warning("Web search failed: %s", exc)
 
         history = self._build_chat_history(conversation_id)
 
@@ -179,6 +221,9 @@ Conversation history:
 Retrieved knowledge base context:
 {rag_context or '(no relevant documents found)'}
 
+Web search context:
+{web_context or '(no web search used)'}
+
 User question:
 {enriched_message}
 
@@ -195,4 +240,6 @@ Provide a helpful answer:"""
         return {
             "reply": reply,
             "sources": sources,
+            "web_sources": web_sources,
+            "used_web_search": used_web,
         }
