@@ -151,6 +151,9 @@ def _search_duckduckgo_html(query: str, max_results: int = 5) -> list[WebSearchR
                     link = title_elem.get("href", "")
                     if "uddg=" in link:
                         link = urllib.parse.unquote(link.split("uddg=")[1].split("&")[0])
+                    # Filter out ad tracking URLs
+                    if "duckduckgo.com/y.js" in link or "bing.com/aclick" in link or "doubleclick.net" in link:
+                        continue
                     snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
                     if title and link:
                         results.append(WebSearchResult(title=title, url=link, snippet=snippet))
@@ -172,10 +175,13 @@ def _search_duckduckgo(query: str, max_results: int) -> list[WebSearchResult]:
 
             with DDGS() as ddgs:
                 for item in ddgs.text(query, max_results=max_results):
+                    link = item.get("href", item.get("link", ""))
+                    if "duckduckgo.com/y.js" in link or "bing.com/aclick" in link:
+                        continue
                     results.append(
                         WebSearchResult(
                             title=item.get("title", ""),
-                            url=item.get("href", item.get("link", "")),
+                            url=link,
                             snippet=item.get("body", item.get("snippet", "")),
                         )
                     )
@@ -204,7 +210,7 @@ def search_web(query: str, max_results: int | None = None) -> tuple[str, list[st
 
     if settings.web_fetch_pages:
         for hit in hits[: settings.web_fetch_top_n]:
-            if hit.url and hit.url.startswith("http"):
+            if hit.url and hit.url.startswith("http") and "duckduckgo.com/y.js" not in hit.url and "bing.com/aclick" not in hit.url:
                 hit.body = _fetch_page_text(hit.url)
 
     blocks: list[str] = []
