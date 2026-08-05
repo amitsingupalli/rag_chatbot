@@ -8,11 +8,23 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Environment variables
+# Environment variables & secrets
 .env
+.env.*
+*.env
 
-# Data & storage directories
+# SQLite Databases & persistent local storage
+*.db
+*.sqlite
+*.sqlite3
 data/
 storage/
+chroma_db/
+
+# IDE & Editor settings
 .idea/
 .vscode/
+
+# Logs & temp files
+*.log
+scratch/
