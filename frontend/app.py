@@ -294,6 +294,11 @@ with st.sidebar:
                 st.session_state.conversation_id = new_conv["conversation_id"]
                 st.session_state.messages = []
                 st.session_state.conversations.insert(0, new_conv)
+                st.session_state.pending_doc_name = None
+                st.session_state.pending_image_name = None
+                st.session_state.pending_image = None
+                st.session_state.pop("last_indexed_file", None)
+                st.session_state.pop("last_indexed_chat_file", None)
                 st.rerun()
 
     if st.session_state.username:
@@ -317,6 +322,11 @@ with st.sidebar:
                 type="primary" if is_active else "secondary",
             ):
                 st.session_state.conversation_id = conv["conversation_id"]
+                st.session_state.pending_doc_name = None
+                st.session_state.pending_image_name = None
+                st.session_state.pending_image = None
+                st.session_state.pop("last_indexed_file", None)
+                st.session_state.pop("last_indexed_chat_file", None)
                 if db:
                     st.session_state.messages = db.get_messages(conv["conversation_id"])
                 st.rerun()
@@ -340,13 +350,13 @@ with st.sidebar:
         key="doc_uploader",
     )
     if uploaded_doc and st.session_state.user_id and rag_engine:
-        file_key = f"{uploaded_doc.name}_{uploaded_doc.size}"
+        file_key = f"{uploaded_doc.name}_{uploaded_doc.size}_{st.session_state.conversation_id}"
         if st.session_state.get("last_indexed_file") != file_key:
             with st.spinner(f"Indexing {uploaded_doc.name}…"):
                 try:
                     data = uploaded_doc.read()
                     chunks = rag_engine.ingestion.ingest_bytes(
-                        data, uploaded_doc.name, st.session_state.user_id
+                        data, uploaded_doc.name, st.session_state.user_id, st.session_state.conversation_id
                     )
                     st.session_state["last_indexed_file"] = file_key
                     st.success(f"Indexed {chunks} chunks from {uploaded_doc.name}")
@@ -422,13 +432,13 @@ with attach_col:
                 key="chat_doc_uploader_segmented",
             )
             if doc_file and rag_engine and st.session_state.user_id:
-                file_key = f"doc_{doc_file.name}_{doc_file.size}"
+                file_key = f"doc_{doc_file.name}_{doc_file.size}_{st.session_state.conversation_id}"
                 if st.session_state.get("last_indexed_chat_file") != file_key:
                     with st.spinner(f"Indexing {doc_file.name}…"):
                         try:
                             data = doc_file.read()
                             chunks = rag_engine.ingestion.ingest_bytes(
-                                data, doc_file.name, st.session_state.user_id
+                                data, doc_file.name, st.session_state.user_id, st.session_state.conversation_id
                             )
                             st.session_state["last_indexed_chat_file"] = file_key
                             st.session_state.pending_doc_name = doc_file.name

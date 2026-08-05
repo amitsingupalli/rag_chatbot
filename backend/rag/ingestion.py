@@ -53,12 +53,15 @@ class IngestionPipeline:
         nodes = self._splitter.get_nodes_from_documents([doc])
         return [Document(text=n.get_content(), metadata=n.metadata) for n in nodes]
 
-    def ingest_text_file(self, file_path: Path, user_id: str | None = None) -> int:
+    def ingest_text_file(
+        self, file_path: Path, user_id: str | None = None, conversation_id: str | None = None
+    ) -> int:
         text = file_path.read_text(encoding="utf-8", errors="ignore")
         metadata = {
             "source": file_path.name,
             "type": "text",
             "user_id": user_id or "global",
+            "conversation_id": conversation_id or "global",
         }
         docs = self._build_documents_from_text(text, metadata)
         VectorStoreIndex.from_documents(
@@ -68,7 +71,9 @@ class IngestionPipeline:
         )
         return len(docs)
 
-    def ingest_pdf(self, file_path: Path, user_id: str | None = None) -> int:
+    def ingest_pdf(
+        self, file_path: Path, user_id: str | None = None, conversation_id: str | None = None
+    ) -> int:
         pages = []
         if settings.llama_cloud_api_key:
             try:
@@ -90,6 +95,7 @@ class IngestionPipeline:
                                     "page": i + 1,
                                     "type": "pdf_llamaparse",
                                     "user_id": user_id or "global",
+                                    "conversation_id": conversation_id or "global",
                                 },
                             )
                         )
@@ -123,6 +129,7 @@ class IngestionPipeline:
                                 "page": i + 1,
                                 "type": "pdf",
                                 "user_id": user_id or "global",
+                                "conversation_id": conversation_id or "global",
                             },
                         )
                     )
@@ -137,7 +144,9 @@ class IngestionPipeline:
         )
         return len(docs)
 
-    def ingest_image(self, file_path: Path, user_id: str | None = None) -> int:
+    def ingest_image(
+        self, file_path: Path, user_id: str | None = None, conversation_id: str | None = None
+    ) -> int:
         data = file_path.read_bytes()
         result = process_image_bytes(data)
         text = (
@@ -149,6 +158,7 @@ class IngestionPipeline:
             "source": file_path.name,
             "type": "image",
             "user_id": user_id or "global",
+            "conversation_id": conversation_id or "global",
             "ocr": result["ocr_text"][:500],
         }
         docs = self._build_documents_from_text(text, metadata)
@@ -159,7 +169,9 @@ class IngestionPipeline:
         )
         return len(docs)
 
-    def ingest_pptx(self, file_path: Path, user_id: str | None = None) -> int:
+    def ingest_pptx(
+        self, file_path: Path, user_id: str | None = None, conversation_id: str | None = None
+    ) -> int:
         slides = []
         if settings.llama_cloud_api_key:
             try:
@@ -181,6 +193,7 @@ class IngestionPipeline:
                                     "page": i + 1,
                                     "type": "pptx_llamaparse",
                                     "user_id": user_id or "global",
+                                    "conversation_id": conversation_id or "global",
                                 },
                             )
                         )
@@ -207,6 +220,7 @@ class IngestionPipeline:
                                     "page": i + 1,
                                     "type": "pptx",
                                     "user_id": user_id or "global",
+                                    "conversation_id": conversation_id or "global",
                                 },
                             )
                         )
@@ -224,12 +238,15 @@ class IngestionPipeline:
         )
         return len(docs)
 
-    def ingest_csv(self, file_path: Path, user_id: str | None = None) -> int:
+    def ingest_csv(
+        self, file_path: Path, user_id: str | None = None, conversation_id: str | None = None
+    ) -> int:
         text = file_path.read_text(encoding="utf-8", errors="ignore")
         metadata = {
             "source": file_path.name,
             "type": "csv",
             "user_id": user_id or "global",
+            "conversation_id": conversation_id or "global",
         }
         docs = self._build_documents_from_text(text, metadata)
         VectorStoreIndex.from_documents(
@@ -239,17 +256,23 @@ class IngestionPipeline:
         )
         return len(docs)
 
-    def ingest_file(self, file_path: str | Path, user_id: str | None = None) -> int:
+    def ingest_file(
+        self, file_path: str | Path, user_id: str | None = None, conversation_id: str | None = None
+    ) -> int:
         file_path = Path(file_path)
         suffix = file_path.suffix.lower()
         if suffix in SUPPORTED_IMAGE_TYPES:
-            return self.ingest_image(file_path, user_id)
+            return self.ingest_image(file_path, user_id, conversation_id)
         if suffix == ".pdf":
-            return self.ingest_pdf(file_path, user_id)
+            return self.ingest_pdf(file_path, user_id, conversation_id)
         if suffix in {".ppt", ".pptx"}:
-            return self.ingest_pptx(file_path, user_id)
+            return self.ingest_pptx(file_path, user_id, conversation_id)
         if suffix in {".txt", ".md", ".csv", ".json", ".tsv"}:
-            return self.ingest_csv(file_path, user_id) if suffix == ".csv" else self.ingest_text_file(file_path, user_id)
+            return (
+                self.ingest_csv(file_path, user_id, conversation_id)
+                if suffix == ".csv"
+                else self.ingest_text_file(file_path, user_id, conversation_id)
+            )
         raise ValueError(f"Unsupported file type: {suffix}")
 
     def ingest_bytes(
@@ -257,7 +280,8 @@ class IngestionPipeline:
         data: bytes,
         filename: str,
         user_id: str | None = None,
+        conversation_id: str | None = None,
     ) -> int:
         dest = settings.uploads_path / f"{uuid.uuid4().hex}_{filename}"
         dest.write_bytes(data)
-        return self.ingest_file(dest, user_id)
+        return self.ingest_file(dest, user_id, conversation_id)

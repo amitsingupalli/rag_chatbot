@@ -29,11 +29,15 @@ from backend.rag.web_search import search_web, should_search_web
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are a helpful, precise AI assistant powered by an Advanced RAG system.
-Use the provided context from indexed documents and conversation history to answer questions accurately.
-If local documents do not contain enough information to answer the question, state that clearly based on the provided document context.
-When image OCR text is provided, analyze it carefully and reference specific details.
-Be concise but thorough. Format responses with markdown when helpful."""
+SYSTEM_PROMPT = """You are a helpful, precise AI assistant.
+Respond directly, naturally, and concisely to the user's question using the provided context.
+
+CRITICAL INSTRUCTIONS:
+- Do NOT output your internal thinking, chunking process, or raw document extracts.
+- Do NOT repeat or dump raw retrieved context passages in your response.
+- Perform all document context analysis silently in the background and present ONLY your final, well-structured answer.
+- Format responses cleanly with markdown headings, bullet points, or paragraphs when helpful.
+- If the context does not contain enough information, state that clearly and directly."""
 
 
 class AdvancedRAGEngine:
@@ -115,7 +119,9 @@ class AdvancedRAGEngine:
             history.append(ChatMessage(role=role, content=msg["content"]))
         return history
 
-    def _retrieve_context(self, query: str) -> tuple[str, list[str]]:
+    def _retrieve_context(
+        self, query: str, user_id: str | None = None, conversation_id: str | None = None
+    ) -> tuple[str, list[str]]:
         try:
             from llama_index.core.schema import QueryBundle
             all_nodes = []
@@ -149,6 +155,13 @@ class AdvancedRAGEngine:
                 node_id = node.node.node_id
                 if node_id in seen:
                     continue
+                node_conv = node.node.metadata.get("conversation_id")
+                node_user = node.node.metadata.get("user_id")
+                if conversation_id and node_conv and node_conv != "global" and node_conv != conversation_id:
+                    continue
+                if user_id and node_user and node_user != "global" and node_user != user_id:
+                    continue
+
                 seen.add(node_id)
                 source = node.node.metadata.get("source", "unknown")
                 sources.append(source)
@@ -158,12 +171,22 @@ class AdvancedRAGEngine:
             if not chunks or is_summary_q:
                 try:
                     docs_map = self.ingestion.index.docstore.docs
-                    for d_id, d_node in list(docs_map.items())[-15:]:
-                        if d_id not in seen:
-                            seen.add(d_id)
-                            src = d_node.metadata.get("source", "uploaded_doc")
-                            sources.append(src)
-                            chunks.append(d_node.get_content())
+                    for d_id, d_node in reversed(list(docs_map.items())):
+                        if d_id in seen:
+                            continue
+                        node_conv = d_node.metadata.get("conversation_id")
+                        node_user = d_node.metadata.get("user_id")
+                        if conversation_id and node_conv and node_conv != "global" and node_conv != conversation_id:
+                            continue
+                        if user_id and node_user and node_user != "global" and node_user != user_id:
+                            continue
+
+                        seen.add(d_id)
+                        src = d_node.metadata.get("source", "uploaded_doc")
+                        sources.append(src)
+                        chunks.append(d_node.get_content())
+                        if len(chunks) >= 15:
+                            break
                 except Exception as exc:
                     logger.warning("Docstore fallback error: %s", exc)
 
@@ -189,7 +212,7 @@ class AdvancedRAGEngine:
             )
 
         user_memory = self.memory.get_context(user_id)
-        rag_context, sources = self._retrieve_context(enriched_message)
+        rag_context, sources = self._retrieve_context(enriched_message, user_id=user_id, conversation_id=conversation_id)
 
         web_context = ""
         web_sources: list[str] = []
