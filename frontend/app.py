@@ -590,6 +590,7 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
             st.session_state.conversation_id,
             "assistant",
             reply,
+            image_path=None,
             sources=all_sources,
         )
 

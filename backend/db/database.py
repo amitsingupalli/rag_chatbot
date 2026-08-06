@@ -191,8 +191,14 @@ class Database:
         image_path: str | None = None,
         sources: list[str] | str | None = None,
         web_sources: list[str] | str | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         import json
+        if "sources" in kwargs and not sources:
+            sources = kwargs["sources"]
+        if "web_sources" in kwargs and not web_sources:
+            web_sources = kwargs["web_sources"]
+
         message_id = str(uuid.uuid4())
         now = _utcnow()
         src_str = json.dumps(sources) if isinstance(sources, list) else sources
