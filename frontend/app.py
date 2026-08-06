@@ -42,6 +42,10 @@ def get_db_and_engine():
 
 try:
     db, rag_engine = get_db_and_engine()
+    import inspect
+    if "sources" not in inspect.signature(db.add_message).parameters:
+        st.cache_resource.clear()
+        db, rag_engine = get_db_and_engine()
 except Exception as e:
     st.error(f"Error initializing RAG Engine: {e}")
     db, rag_engine = None, None
@@ -586,13 +590,21 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
         web_sources = result.get("web_sources", [])
         all_sources = sources + web_sources
 
-        db.add_message(
-            st.session_state.conversation_id,
-            "assistant",
-            reply,
-            image_path=None,
-            sources=all_sources,
-        )
+        try:
+            db.add_message(
+                st.session_state.conversation_id,
+                "assistant",
+                reply,
+                image_path=None,
+                sources=all_sources,
+            )
+        except TypeError:
+            db.add_message(
+                st.session_state.conversation_id,
+                "assistant",
+                reply,
+                image_path=None,
+            )
 
         st.session_state.pending_image = None
         st.session_state.pending_image_name = None
