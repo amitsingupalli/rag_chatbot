@@ -76,6 +76,13 @@ class Database:
                     ON user_memory(user_id);
                 """
             )
+            user_cols = [r["name"] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+            if "hashed_password" not in user_cols:
+                try:
+                    conn.execute("ALTER TABLE users ADD COLUMN hashed_password TEXT")
+                except Exception:
+                    pass
+
             cols = [r["name"] for r in conn.execute("PRAGMA table_info(messages)").fetchall()]
             if "sources" not in cols:
                 try:
@@ -88,15 +95,15 @@ class Database:
                 except Exception:
                     pass
 
-    def create_user(self, username: str) -> dict[str, Any]:
+    def create_user(self, username: str, hashed_password: str | None = None) -> dict[str, Any]:
         user_id = str(uuid.uuid4())
         now = _utcnow()
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO users (user_id, username, created_at) VALUES (?, ?, ?)",
-                (user_id, username, now),
+                "INSERT INTO users (user_id, username, hashed_password, created_at) VALUES (?, ?, ?, ?)",
+                (user_id, username, hashed_password, now),
             )
-        return {"user_id": user_id, "username": username, "created_at": now}
+        return {"user_id": user_id, "username": username, "hashed_password": hashed_password, "created_at": now}
 
     def get_user(self, user_id: str) -> dict[str, Any] | None:
         with self._connect() as conn:

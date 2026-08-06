@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import base64
+import json
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from backend.auth import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    verify_password,
+)
 from backend.config import settings
 from backend.db.database import Database
 from backend.models.schemas import (
@@ -18,13 +26,17 @@ from backend.models.schemas import (
     DocumentUploadResponse,
     HealthResponse,
     MessageResponse,
+    TokenResponse,
     UserCreate,
+    UserLogin,
+    UserRegister,
     UserResponse,
 )
 from backend.rag.engine import AdvancedRAGEngine
 
 db = Database(settings.db_path)
 rag_engine: AdvancedRAGEngine | None = None
+security = HTTPBearer()
 
 
 @asynccontextmanager
@@ -39,8 +51,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="RAG Chatbot API",
-    version="1.0.0",
+    title="RAG Chatbot API (Authenticated)",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -53,6 +65,17 @@ app.add_middleware(
 )
 
 
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    payload = decode_access_token(credentials.credentials)
+    user_id = payload.get("sub") or payload.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid auth payload")
+    user = db.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
+
+
 @app.get("/health", response_model=HealthResponse)
 def health():
     return HealthResponse(
@@ -62,52 +85,53 @@ def health():
     )
 
 
-@app.post("/users", response_model=UserResponse)
-def create_user(payload: UserCreate):
-    existing = db.get_user_by_username(payload.username)
+# ── Auth Endpoints ───────────────────────────────────────────────────────────
+@app.post("/auth/register", response_model=TokenResponse)
+def register(payload: UserRegister):
+    existing = db.get_user_by_username(payload.username.strip())
     if existing:
-        return UserResponse(
-            user_id=existing["user_id"],
-            username=existing["username"],
-            created_at=datetime.fromisoformat(existing["created_at"]),
-        )
-    user = db.create_user(payload.username)
-    return UserResponse(
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    hashed = hash_password(payload.password)
+    user = db.create_user(payload.username.strip(), hashed_password=hashed)
+    token = create_access_token({"sub": user["user_id"], "user_id": user["user_id"], "username": user["username"]})
+    return TokenResponse(
+        access_token=token,
+        token_type="bearer",
         user_id=user["user_id"],
         username=user["username"],
-        created_at=datetime.fromisoformat(user["created_at"]),
     )
 
 
-@app.get("/users/{user_id}", response_model=UserResponse)
-def get_user(user_id: str):
-    user = db.get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return UserResponse(
+@app.post("/auth/login", response_model=TokenResponse)
+def login(payload: UserLogin):
+    user = db.get_user_by_username(payload.username.strip())
+    if not user or not verify_password(payload.password, user.get("hashed_password")):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    
+    token = create_access_token({"sub": user["user_id"], "user_id": user["user_id"], "username": user["username"]})
+    return TokenResponse(
+        access_token=token,
+        token_type="bearer",
         user_id=user["user_id"],
         username=user["username"],
-        created_at=datetime.fromisoformat(user["created_at"]),
     )
 
 
-@app.post("/conversations", response_model=ConversationResponse)
-def create_conversation(payload: ConversationCreate):
-    if not db.get_user(payload.user_id):
-        raise HTTPException(status_code=404, detail="User not found")
-    conv = db.create_conversation(payload.user_id, payload.title)
-    return ConversationResponse(
-        conversation_id=conv["conversation_id"],
-        user_id=conv["user_id"],
-        title=conv["title"],
-        created_at=datetime.fromisoformat(conv["created_at"]),
-        updated_at=datetime.fromisoformat(conv["updated_at"]),
+@app.get("/auth/me", response_model=UserResponse)
+def get_me(current_user: dict = Depends(get_current_user)):
+    return UserResponse(
+        user_id=current_user["user_id"],
+        username=current_user["username"],
+        created_at=datetime.fromisoformat(current_user["created_at"]),
     )
 
 
-@app.get("/conversations/{user_id}", response_model=list[ConversationResponse])
-def list_conversations(user_id: str):
-    convs = db.list_conversations(user_id)
+# ── Conversation Endpoints (Per-User Filtered) ────────────────────────────────
+@app.get("/conversations", response_model=list[ConversationResponse])
+def list_user_conversations(current_user: dict = Depends(get_current_user)):
+    """List ONLY the current authenticated user's conversations."""
+    convs = db.list_conversations(current_user["user_id"])
     return [
         ConversationResponse(
             conversation_id=c["conversation_id"],
@@ -120,84 +144,125 @@ def list_conversations(user_id: str):
     ]
 
 
-@app.delete("/conversations/{conversation_id}")
-def delete_conversation(conversation_id: str):
+@app.post("/conversations", response_model=ConversationResponse)
+def create_conversation(payload: ConversationCreate, current_user: dict = Depends(get_current_user)):
+    """Create a new conversation permanently tagged with current_user['user_id']."""
+    conv = db.create_conversation(current_user["user_id"], payload.title)
+    return ConversationResponse(
+        conversation_id=conv["conversation_id"],
+        user_id=conv["user_id"],
+        title=conv["title"],
+        created_at=datetime.fromisoformat(conv["created_at"]),
+        updated_at=datetime.fromisoformat(conv["updated_at"]),
+    )
+
+
+@app.get("/conversations/{conversation_id}/messages", response_model=list[MessageResponse])
+def get_conversation_messages(conversation_id: str, current_user: dict = Depends(get_current_user)):
+    """Get messages for a conversation strictly checking ownership."""
     conv = db.get_conversation(conversation_id)
-    if not conv:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    if not conv or conv["user_id"] != current_user["user_id"]:
+        raise HTTPException(status_code=404, detail="Conversation not found or access denied")
+    
+    msgs = db.get_messages(conversation_id)
+    result = []
+    for m in msgs:
+        srcs = None
+        wsrcs = None
+        if m.get("sources"):
+            try:
+                srcs = json.loads(m["sources"]) if isinstance(m["sources"], str) else m["sources"]
+            except Exception:
+                srcs = [str(m["sources"])]
+        if m.get("web_sources"):
+            try:
+                wsrcs = json.loads(m["web_sources"]) if isinstance(m["web_sources"], str) else m["web_sources"]
+            except Exception:
+                wsrcs = [str(m["web_sources"])]
+                
+        result.append(
+            MessageResponse(
+                message_id=m["message_id"],
+                conversation_id=m["conversation_id"],
+                role=m["role"],
+                content=m["content"],
+                image_path=m.get("image_path"),
+                sources=srcs,
+                web_sources=wsrcs,
+                created_at=datetime.fromisoformat(m["created_at"]),
+            )
+        )
+    return result
+
+
+@app.delete("/conversations/{conversation_id}")
+def delete_conversation(conversation_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a conversation strictly verifying ownership."""
+    conv = db.get_conversation(conversation_id)
+    if not conv or conv["user_id"] != current_user["user_id"]:
+        raise HTTPException(status_code=404, detail="Conversation not found or access denied")
     db.delete_conversation(conversation_id)
     return {"status": "deleted"}
 
 
-@app.get("/messages/{conversation_id}", response_model=list[MessageResponse])
-def get_messages(conversation_id: str):
-    conv = db.get_conversation(conversation_id)
-    if not conv:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    msgs = db.get_messages(conversation_id)
-    return [
-        MessageResponse(
-            message_id=m["message_id"],
-            conversation_id=m["conversation_id"],
-            role=m["role"],
-            content=m["content"],
-            image_path=m.get("image_path"),
-            created_at=datetime.fromisoformat(m["created_at"]),
-        )
-        for m in msgs
-    ]
-
-
-@app.post("/chat", response_model=ChatResponse)
-def chat(payload: ChatRequest):
+@app.post("/conversations/{conversation_id}/messages", response_model=ChatResponse)
+def send_message(
+    conversation_id: str,
+    payload: ChatRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Post message in a thread, execute RAG pipeline, append response."""
     if not rag_engine:
         raise HTTPException(status_code=503, detail="RAG engine not ready")
 
-    conv = db.get_conversation(payload.conversation_id)
-    if not conv or conv["user_id"] != payload.user_id:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conv = db.get_conversation(conversation_id)
+    if not conv or conv["user_id"] != current_user["user_id"]:
+        raise HTTPException(status_code=404, detail="Conversation not found or access denied")
 
     image_path = None
     if payload.image_base64:
         img_data = base64.b64decode(
             payload.image_base64.split(",")[-1] if "," in payload.image_base64 else payload.image_base64
         )
-        image_path = str(
-            settings.uploads_path / f"{uuid.uuid4().hex}_chat_image.png"
-        )
+        image_path = str(settings.uploads_path / f"{uuid.uuid4().hex}_chat_image.png")
         with open(image_path, "wb") as f:
             f.write(img_data)
 
     db.add_message(
-        payload.conversation_id,
+        conversation_id,
         "user",
         payload.message,
         image_path,
     )
 
-    msgs = db.get_messages(payload.conversation_id)
+    msgs = db.get_messages(conversation_id)
     if len(msgs) == 1:
-        title = payload.message[:48] + ("..." if len(payload.message) > 48 else "")
-        db.update_conversation_title(payload.conversation_id, title)
+        title = payload.message[:44] + ("..." if len(payload.message) > 44 else "")
+        db.update_conversation_title(conversation_id, title)
 
     result = rag_engine.chat(
-        user_id=payload.user_id,
-        conversation_id=payload.conversation_id,
+        user_id=current_user["user_id"],
+        conversation_id=conversation_id,
         message=payload.message,
         image_base64=payload.image_base64,
         use_web_search=payload.use_web_search,
     )
 
+    sources = result.get("sources", [])
+    web_sources = result.get("web_sources", [])
+    all_sources = sources + web_sources
+
     saved = db.add_message(
-        payload.conversation_id,
+        conversation_id,
         "assistant",
         result["reply"],
+        sources=all_sources,
     )
 
     return ChatResponse(
         reply=result["reply"],
-        sources=result.get("sources", []),
-        web_sources=result.get("web_sources", []),
+        sources=sources,
+        web_sources=web_sources,
         used_web_search=result.get("used_web_search", False),
         message_id=saved["message_id"],
     )
@@ -206,8 +271,10 @@ def chat(payload: ChatRequest):
 @app.post("/documents/upload", response_model=DocumentUploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
-    user_id: str | None = None,
+    conversation_id: str | None = None,
+    current_user: dict = Depends(get_current_user),
 ):
+    """Upload document tagged with current_user['user_id'] and optional conversation_id."""
     if not rag_engine:
         raise HTTPException(status_code=503, detail="RAG engine not ready")
 
@@ -217,7 +284,7 @@ async def upload_document(
 
     try:
         chunks = rag_engine.ingestion.ingest_bytes(
-            data, file.filename or "upload", user_id
+            data, file.filename or "upload", current_user["user_id"], conversation_id
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -227,11 +294,3 @@ async def upload_document(
         chunks_indexed=chunks,
         message=f"Indexed {chunks} chunks from {file.filename}",
     )
-
-
-@app.get("/memory/{user_id}")
-def get_user_memory(user_id: str):
-    if not db.get_user(user_id):
-        raise HTTPException(status_code=404, detail="User not found")
-    memories = db.get_user_memories(user_id)
-    return {"user_id": user_id, "memories": memories}

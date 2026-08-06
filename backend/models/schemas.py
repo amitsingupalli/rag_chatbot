@@ -8,6 +8,23 @@ class UserCreate(BaseModel):
     username: str = Field(..., min_length=1, max_length=64)
 
 
+class UserRegister(BaseModel):
+    username: str = Field(..., min_length=2, max_length=64)
+    password: str = Field(..., min_length=4, max_length=128)
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user_id: str
+    username: str
+
+
 class UserResponse(BaseModel):
     user_id: str
     username: str
@@ -15,7 +32,6 @@ class UserResponse(BaseModel):
 
 
 class ConversationCreate(BaseModel):
-    user_id: str
     title: str = "New Chat"
 
 
@@ -33,12 +49,12 @@ class MessageResponse(BaseModel):
     role: Literal["user", "assistant"]
     content: str
     image_path: str | None = None
+    sources: list[str] | None = None
+    web_sources: list[str] | None = None
     created_at: datetime
 
 
 class ChatRequest(BaseModel):
-    user_id: str
-    conversation_id: str
     message: str
     image_base64: str | None = None
     use_web_search: bool | None = None
