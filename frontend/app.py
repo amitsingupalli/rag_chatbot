@@ -30,7 +30,7 @@ st.set_page_config(
 
 # ── Initialize Database & RAG Engine ──────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
-def get_db_and_engine():
+def _load_engine_instance():
     settings.data_path.mkdir(parents=True, exist_ok=True)
     settings.storage_path.mkdir(parents=True, exist_ok=True)
     settings.documents_path.mkdir(parents=True, exist_ok=True)
@@ -40,12 +40,22 @@ def get_db_and_engine():
     engine = AdvancedRAGEngine(db)
     return db, engine
 
+
+def get_db_and_engine():
+    try:
+        db, engine = _load_engine_instance()
+        import inspect
+        if "sources" not in inspect.signature(db.add_message).parameters:
+            st.cache_resource.clear()
+            return _load_engine_instance()
+        return db, engine
+    except Exception:
+        st.cache_resource.clear()
+        return _load_engine_instance()
+
+
 try:
     db, rag_engine = get_db_and_engine()
-    import inspect
-    if "sources" not in inspect.signature(db.add_message).parameters:
-        st.cache_resource.clear()
-        db, rag_engine = get_db_and_engine()
 except Exception as e:
     st.error(f"Error initializing RAG Engine: {e}")
     db, rag_engine = None, None
