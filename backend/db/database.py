@@ -76,6 +76,17 @@ class Database:
                     ON user_memory(user_id);
                 """
             )
+            cols = [r["name"] for r in conn.execute("PRAGMA table_info(messages)").fetchall()]
+            if "sources" not in cols:
+                try:
+                    conn.execute("ALTER TABLE messages ADD COLUMN sources TEXT")
+                except Exception:
+                    pass
+            if "web_sources" not in cols:
+                try:
+                    conn.execute("ALTER TABLE messages ADD COLUMN web_sources TEXT")
+                except Exception:
+                    pass
 
     def create_user(self, username: str) -> dict[str, Any]:
         user_id = str(uuid.uuid4())
@@ -171,17 +182,23 @@ class Database:
         role: str,
         content: str,
         image_path: str | None = None,
+        sources: list[str] | str | None = None,
+        web_sources: list[str] | str | None = None,
     ) -> dict[str, Any]:
+        import json
         message_id = str(uuid.uuid4())
         now = _utcnow()
+        src_str = json.dumps(sources) if isinstance(sources, list) else sources
+        wsrc_str = json.dumps(web_sources) if isinstance(web_sources, list) else web_sources
+
         with self._connect() as conn:
             conn.execute(
                 """
                 INSERT INTO messages
-                (message_id, conversation_id, role, content, image_path, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (message_id, conversation_id, role, content, image_path, sources, web_sources, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (message_id, conversation_id, role, content, image_path, now),
+                (message_id, conversation_id, role, content, image_path, src_str, wsrc_str, now),
             )
         self.touch_conversation(conversation_id)
         return {
@@ -190,6 +207,8 @@ class Database:
             "role": role,
             "content": content,
             "image_path": image_path,
+            "sources": sources,
+            "web_sources": web_sources,
             "created_at": now,
         }
 
