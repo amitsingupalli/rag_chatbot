@@ -151,6 +151,8 @@ class AdvancedRAGEngine:
             seen: set[str] = set()
             sources: list[str] = []
             chunks: list[str] = []
+            chunk_sources: list[str] = []
+
             for node in all_nodes:
                 node_id = node.node.node_id
                 if node_id in seen:
@@ -166,31 +168,53 @@ class AdvancedRAGEngine:
                 source = node.node.metadata.get("source", "unknown")
                 sources.append(source)
                 chunks.append(node.node.get_content())
+                chunk_sources.append(source)
 
-            # 3. Robust Fallback: Pull recent document nodes directly if overview asked or no chunks found
+            # 3. Robust direct ChromaDB collection query fallback
             if not chunks or is_summary_q:
                 try:
-                    docs_map = self.ingestion.index.docstore.docs
-                    for d_id, d_node in reversed(list(docs_map.items())):
-                        if d_id in seen:
-                            continue
-                        node_conv = d_node.metadata.get("conversation_id")
-                        node_user = d_node.metadata.get("user_id")
-                        if conversation_id and node_conv and node_conv != "global" and node_conv != conversation_id:
-                            continue
-                        if user_id and node_user and node_user != "global" and node_user != user_id:
-                            continue
+                    filter_dict = {}
+                    if conversation_id:
+                        filter_dict["conversation_id"] = conversation_id
+                    elif user_id:
+                        filter_dict["user_id"] = user_id
 
-                        seen.add(d_id)
-                        src = d_node.metadata.get("source", "uploaded_doc")
-                        sources.append(src)
-                        chunks.append(d_node.get_content())
-                        if len(chunks) >= 15:
-                            break
+                    res_direct = self.ingestion._collection.get(
+                        where=filter_dict if filter_dict else None,
+                        limit=25
+                    )
+                    
+                    direct_docs = res_direct.get("documents", [])
+                    direct_metas = res_direct.get("metadatas", [])
+                    
+                    for doc_text, meta in zip(direct_docs, direct_metas):
+                        if doc_text and doc_text.strip():
+                            src = meta.get("source", "uploaded_doc")
+                            
+                            # Deduplicate content
+                            text_hash = str(hash(doc_text))
+                            if text_hash in seen:
+                                continue
+                            seen.add(text_hash)
+                            
+                            sources.append(src)
+                            chunks.append(doc_text)
+                            chunk_sources.append(src)
                 except Exception as exc:
-                    logger.warning("Docstore fallback error: %s", exc)
+                    logger.warning("ChromaDB direct query fallback failed: %s", exc)
 
-            context = "\n\n---\n\n".join(chunks[: settings.rerank_top_n * 4])
+            # 4. Format each context chunk with clear source filename
+            import os
+            formatted_chunks = []
+            for doc_text, src in zip(chunks, chunk_sources):
+                clean_src = os.path.basename(str(src))
+                # Strip out UUID prefixes from filenames for clean presentation to LLM
+                display_src = clean_src
+                if len(clean_src) > 33 and clean_src[32] == "_":
+                    display_src = clean_src[33:]
+                formatted_chunks.append(f"[Source Document: {display_src}]\n{doc_text}")
+
+            context = "\n\n---\n\n".join(formatted_chunks[: settings.rerank_top_n * 4])
             return context, list(dict.fromkeys(sources))
         except Exception as exc:
             logger.warning("Retrieval failed: %s", exc)
