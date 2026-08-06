@@ -282,6 +282,11 @@ class IngestionPipeline:
         user_id: str | None = None,
         conversation_id: str | None = None,
     ) -> int:
-        dest = settings.uploads_path / f"{uuid.uuid4().hex}_{filename}"
+        import re
+        p = Path(filename)
+        safe_stem = re.sub(r"[^\w\-]", "_", p.stem)
+        safe_ext = p.suffix
+        safe_filename = f"{safe_stem}{safe_ext}"
+        dest = settings.uploads_path / f"{uuid.uuid4().hex}_{safe_filename}"
         dest.write_bytes(data)
         return self.ingest_file(dest, user_id, conversation_id)
