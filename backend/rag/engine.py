@@ -251,33 +251,31 @@ class AdvancedRAGEngine:
 
         history = self._build_chat_history(conversation_id)
 
-        history_text = ""
-        if history:
-            history_text = "\n".join(
-                f"{'User' if m.role == MessageRole.USER else 'Assistant'}: {m.content}"
-                for m in history[-10:]
-            )
+        messages = [
+            ChatMessage(role=MessageRole.SYSTEM, content=SYSTEM_PROMPT),
+        ]
+        if user_memory:
+            messages.append(ChatMessage(role=MessageRole.SYSTEM, content=f"User Context Memory:\n{user_memory}"))
 
-        prompt = f"""{SYSTEM_PROMPT}
+        # Add conversation history
+        for msg in history[-10:]:
+            role = MessageRole.USER if msg.role == MessageRole.USER else MessageRole.ASSISTANT
+            messages.append(ChatMessage(role=role, content=msg.content))
 
-{user_memory}
-
-Conversation history:
-{history_text or '(none)'}
-
-Retrieved knowledge base context:
+        # Add current user query and retrieved context
+        user_message_content = f"""Retrieved knowledge base context:
 {rag_context or '(no relevant documents found)'}
 
 Web search context:
 {web_context or '(no web search used)'}
 
 User question:
-{enriched_message}
+{enriched_message}"""
 
-Provide a helpful answer:"""
+        messages.append(ChatMessage(role=MessageRole.USER, content=user_message_content))
 
-        response = self.llm.complete(prompt)
-        reply = str(response).strip()
+        response = self.llm.chat(messages)
+        reply = str(response.message.content).strip()
 
         self.memory.extract_and_store(user_id, message, reply)
 
