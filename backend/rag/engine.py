@@ -288,3 +288,68 @@ User question:
             "web_sources": web_sources,
             "used_web_search": used_web,
         }
+
+    def chat_stream(
+        self,
+        user_id: str,
+        conversation_id: str,
+        message: str,
+        image_base64: str | None = None,
+        use_web_search: bool | None = None,
+    ):
+        enriched_message = message
+        if image_base64:
+            ocr_result = process_image_base64(image_base64)
+            enriched_message = (
+                f"{message}\n\n[Image OCR Content]\n{ocr_result['ocr_text']}"
+            )
+
+        user_memory = self.memory.get_context(user_id)
+        rag_context, sources = self._retrieve_context(enriched_message, user_id=user_id, conversation_id=conversation_id)
+
+        web_context = ""
+        web_sources: list[str] = []
+        used_web = False
+        if use_web_search is not False and should_search_web(message, force=use_web_search):
+            try:
+                web_context, web_sources = search_web(message)
+                if web_context:
+                    used_web = True
+            except Exception as exc:
+                logger.warning("Web search failed: %s", exc)
+
+        history = self._build_chat_history(conversation_id)
+
+        messages = [
+            ChatMessage(role=MessageRole.SYSTEM, content=SYSTEM_PROMPT),
+        ]
+        if user_memory:
+            messages.append(ChatMessage(role=MessageRole.SYSTEM, content=f"User Context Memory:\n{user_memory}"))
+
+        for msg in history[-10:]:
+            role = MessageRole.USER if msg.role == MessageRole.USER else MessageRole.ASSISTANT
+            messages.append(ChatMessage(role=role, content=msg.content))
+
+        user_message_content = f"""Retrieved knowledge base context:
+{rag_context or '(no relevant documents found)'}
+
+Web search context:
+{web_context or '(no web search used)'}
+
+User question:
+{enriched_message}"""
+
+        messages.append(ChatMessage(role=MessageRole.USER, content=user_message_content))
+
+        response_stream = self.llm.stream_chat(messages)
+        full_reply = ""
+        for chunk in response_stream:
+            delta = chunk.delta or ""
+            if delta:
+                full_reply += delta
+                yield delta, sources, web_sources, used_web
+
+        self.memory.extract_and_store(user_id, message, full_reply)
+
+        if "remember" in message.lower():
+            self.memory.store_explicit(user_id, message)
