@@ -103,6 +103,17 @@ rag_chatbot/
 
 ---
 
+## ⚖️ AI Ethics & Responsible AI Principles
+
+- **Core Principles**: AI systems must be designed to be fair (unbiased), transparent (understandable decisions), and responsible (safe and harmless to society).
+- **Why It Matters**: Essential to build user trust, comply with legal regulations, prevent harmful discrimination (e.g., in healthcare or finance), and ensure explainability.
+- **Best Practices**: Use diverse and unbiased training data, continuously test for fairness, protect user privacy through encryption/anonymization, and keep humans in the loop for critical decisions.
+- **Real-World Applications**: Actively applied in high-stakes areas like medical diagnoses, self-driving cars, loan approvals, hiring processes, and public surveillance.
+- **Pros and Cons**: Builds trust and reduces legal risks, but can be expensive, slow model releases, and involve trade-offs between fairness and system efficiency.
+- **The Future**: Automated auditing tools, global ethical standards and certifications, and enhanced neural network explainability methods.
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! Feel free to open an issue or submit a pull request for improvements or new features.
