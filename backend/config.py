@@ -12,6 +12,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    gemini_api_key: str | None = None
+    gemini_model: str = "models/gemini-2.0-flash"
     groq_api_key: str | None = None
     groq_model: str = "llama-3.3-70b-versatile"
     llama_cloud_api_key: str | None = None

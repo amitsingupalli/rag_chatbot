@@ -49,19 +49,35 @@ class AdvancedRAGEngine:
         self._setup_query_engine()
 
     def _setup_llm_and_embeddings(self) -> None:
+        gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or settings.gemini_api_key
         groq_key = os.getenv("GROQ_API_KEY") or settings.groq_api_key
 
-        if not groq_key:
-            raise ValueError(
-                "GROQ_API_KEY environment variable or config setting is required to run the LLM."
-            )
+        if gemini_key:
+            from llama_index.llms.gemini import Gemini
 
-        self.llm = Groq(
-            model=settings.groq_model,
-            api_key=groq_key,
-            temperature=0.3,
-        )
-        logger.info("Using Groq LLM with model %s", settings.groq_model)
+            model_name = settings.gemini_model
+            if not model_name.startswith("models/"):
+                model_name = f"models/{model_name}"
+
+            self.llm = Gemini(
+                model=model_name,
+                api_key=gemini_key,
+                temperature=0.3,
+            )
+            logger.info("Using Google Gemini LLM with model %s", model_name)
+        elif groq_key:
+            from llama_index.llms.groq import Groq
+
+            self.llm = Groq(
+                model=settings.groq_model,
+                api_key=groq_key,
+                temperature=0.3,
+            )
+            logger.info("Using Groq LLM with model %s", settings.groq_model)
+        else:
+            raise ValueError(
+                "GEMINI_API_KEY or GROQ_API_KEY environment variable or config setting is required to run the LLM."
+            )
         Settings.llm = self.llm
 
         # Set up HuggingFace embeddings
