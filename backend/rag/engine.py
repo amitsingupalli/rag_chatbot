@@ -50,45 +50,25 @@ class AdvancedRAGEngine:
 
     def _setup_llm_and_embeddings(self) -> None:
         gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or settings.gemini_api_key
-        groq_key = os.getenv("GROQ_API_KEY") or settings.groq_api_key
 
-        self.fallback_llm = None
-
-        if gemini_key:
-            from llama_index.llms.gemini import Gemini
-
-            model_name = settings.gemini_model
-            if not model_name.startswith("models/"):
-                model_name = f"models/{model_name}"
-
-            self.llm = Gemini(
-                model=model_name,
-                api_key=gemini_key,
-                temperature=0.3,
-            )
-            logger.info("Using Google Gemini LLM with model %s", model_name)
-
-            if groq_key:
-                from llama_index.llms.groq import Groq
-                self.fallback_llm = Groq(
-                    model=settings.groq_model,
-                    api_key=groq_key,
-                    temperature=0.3,
-                )
-                logger.info("Groq fallback LLM configured (%s)", settings.groq_model)
-        elif groq_key:
-            from llama_index.llms.groq import Groq
-
-            self.llm = Groq(
-                model=settings.groq_model,
-                api_key=groq_key,
-                temperature=0.3,
-            )
-            logger.info("Using Groq LLM with model %s", settings.groq_model)
-        else:
+        if not gemini_key:
             raise ValueError(
-                "GEMINI_API_KEY or GROQ_API_KEY environment variable or config setting is required to run the LLM."
+                "GEMINI_API_KEY environment variable or config setting is required to run the LLM."
             )
+
+        from llama_index.llms.gemini import Gemini
+
+        model_name = settings.gemini_model
+        if not model_name.startswith("models/"):
+            model_name = f"models/{model_name}"
+
+        self.llm = Gemini(
+            model=model_name,
+            api_key=gemini_key,
+            temperature=0.3,
+        )
+        self.fallback_llm = None
+        logger.info("Using ONLY Google Gemini LLM with model %s", model_name)
         Settings.llm = self.llm
 
         # Set up HuggingFace embeddings
