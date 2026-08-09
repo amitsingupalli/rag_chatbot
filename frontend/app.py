@@ -22,7 +22,7 @@ from backend.db.database import Database
 from backend.rag.engine import AdvancedRAGEngine
 
 st.set_page_config(
-    page_title="RAG Analytics Agent (Claude UI)",
+    page_title="RAG Analysis Agent",
     page_icon="✦",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -555,8 +555,7 @@ with col_top_left:
     st.markdown(
         """
         <div class="chat-title-group">
-            <h2 style="font-size:1.1rem;font-weight:600;margin:0;">Data & Document RAG Agent</h2>
-            <span class="model-badge">ReAct • Hybrid Retrieval • Multimodal</span>
+            <h2 style="font-size:1.1rem;font-weight:600;margin:0;">RAG Analysis Agent</h2>
         </div>
         """,
         unsafe_allow_html=True,
@@ -587,7 +586,7 @@ if not st.session_state.messages:
         <div class="welcome-screen">
             <div class="claude-avatar-large">✦</div>
             <h1>How can I help with your data analysis today?</h1>
-            <p class="welcome-sub">Ask analytical questions, query vector databases, or attach datasets & images for RAG analysis.</p>
+            <p class="welcome-sub">Upload your documents, ask intelligent questions, and get precise context-aware answers with transparent citations.</p>
         </div>
         """,
         unsafe_allow_html=True,
