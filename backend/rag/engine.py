@@ -52,6 +52,8 @@ class AdvancedRAGEngine:
         gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or settings.gemini_api_key
         groq_key = os.getenv("GROQ_API_KEY") or settings.groq_api_key
 
+        self.fallback_llm = None
+
         if gemini_key:
             from llama_index.llms.gemini import Gemini
 
@@ -65,6 +67,15 @@ class AdvancedRAGEngine:
                 temperature=0.3,
             )
             logger.info("Using Google Gemini LLM with model %s", model_name)
+
+            if groq_key:
+                from llama_index.llms.groq import Groq
+                self.fallback_llm = Groq(
+                    model=settings.groq_model,
+                    api_key=groq_key,
+                    temperature=0.3,
+                )
+                logger.info("Groq fallback LLM configured (%s)", settings.groq_model)
         elif groq_key:
             from llama_index.llms.groq import Groq
 
@@ -290,8 +301,16 @@ User question:
 
         messages.append(ChatMessage(role=MessageRole.USER, content=user_message_content))
 
-        response = self.llm.chat(messages)
-        reply = str(response.message.content).strip()
+        try:
+            response = self.llm.chat(messages)
+            reply = str(response.message.content).strip()
+        except Exception as exc:
+            if self.fallback_llm and ("429" in str(exc) or "quota" in str(exc).lower() or "limit" in str(exc).lower()):
+                logger.warning("Primary LLM quota limit hit (%s). Falling back to Groq...", exc)
+                response = self.fallback_llm.chat(messages)
+                reply = str(response.message.content).strip()
+            else:
+                raise exc
 
         self.memory.extract_and_store(user_id, message, reply)
 
