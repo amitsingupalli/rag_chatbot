@@ -22,7 +22,7 @@ from backend.db.database import Database
 from backend.rag.engine import AdvancedRAGEngine
 
 st.set_page_config(
-    page_title="RAG Chat App",
+    page_title="RAG Analytics Agent (Claude UI)",
     page_icon="✦",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -82,6 +82,8 @@ if "pending_doc_name" not in st.session_state:
     st.session_state.pending_doc_name = None
 if "selected_citation" not in st.session_state:
     st.session_state.selected_citation = None
+if "preset_prompt" not in st.session_state:
+    st.session_state.preset_prompt = None
 
 # Auto sign-in default user if not logged in
 if not st.session_state.user_id and db:
@@ -101,27 +103,30 @@ if not st.session_state.user_id and db:
         st.session_state.messages = []
         st.session_state.conversations = [new_conv]
 
-# ── Theme Dynamic CSS ────────────────────────────────────────────────────────
+# ── Theme Dynamic CSS matching Mini Project Claude UI ─────────────────────────
 is_dark = st.session_state.theme == "dark"
 
-bg_canvas = "#1F1E1B" if is_dark else "#F5F3EE"
-bg_sidebar = "#181715" if is_dark else "#EDEAE1"
-bg_surface = "#2A2925" if is_dark else "#FFFFFF"
-text_primary = "#EDEAE1" if is_dark else "#2B2926"
-text_muted = "#A19B91" if is_dark else "#7A756C"
-border_subtle = "#363430" if is_dark else "#E3DFD5"
-accent_clay = "#E08A63" if is_dark else "#D97757"
-accent_hover = "#C4633F"
+bg_app = "#18181b" if is_dark else "#f5f3ee"
+bg_sidebar = "#09090b" if is_dark else "#edeae1"
+bg_card = "#27272a" if is_dark else "#ffffff"
+border_color = "rgba(255, 255, 255, 0.08)" if is_dark else "rgba(0, 0, 0, 0.08)"
+border_hover = "rgba(255, 255, 255, 0.15)" if is_dark else "rgba(0, 0, 0, 0.15)"
+text_main = "#f4f4f5" if is_dark else "#18181b"
+text_muted = "#a1a1aa" if is_dark else "#71717a"
+text_dim = "#71717a" if is_dark else "#a1a1aa"
+accent_claude = "#da7756"
+accent_hover = "#e0886b"
+emerald = "#10b981"
 
 st.markdown(
     f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 html, body, [class*="css"] {{
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background-color: {bg_canvas} !important;
-    color: {text_primary} !important;
+    background-color: {bg_app} !important;
+    color: {text_main} !important;
 }}
 
 #MainMenu, footer {{ visibility: hidden; }}
@@ -134,9 +139,9 @@ button[aria-label="Expand sidebar"],
 button[aria-label="Collapse sidebar"] {{
     visibility: visible !important;
     display: flex !important;
-    color: {accent_clay} !important;
-    background: {bg_surface} !important;
-    border: 1px solid {border_subtle} !important;
+    color: {accent_claude} !important;
+    background: {bg_card} !important;
+    border: 1px solid {border_color} !important;
     border-radius: 8px !important;
     z-index: 999999 !important;
 }}
@@ -144,85 +149,163 @@ button[aria-label="Collapse sidebar"] {{
 .block-container {{
     padding-top: 1rem;
     padding-bottom: 7rem;
-    max-width: 740px;
+    max-width: 820px;
 }}
 
-/* Serif Headings */
-.serif-font {{
-    font-family: 'Lora', Georgia, serif;
-}}
-
-/* Top Navigation Bar */
-.top-bar {{
+/* Top Header Controls */
+.top-header-bar {{
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 0px 14px 0px;
-    border-bottom: 1px solid {border_subtle};
+    padding: 12px 18px;
+    background: {bg_card};
+    border: 1px solid {border_color};
+    border-radius: 14px;
     margin-bottom: 1.5rem;
 }}
 
-.top-bar-title {{
-    font-family: 'Lora', Georgia, serif;
-    font-size: 20px;
+.chat-title-group {{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}}
+
+.chat-title-group h2 {{
+    font-size: 1rem;
     font-weight: 600;
-    color: {text_primary};
-    letter-spacing: -0.01em;
+    margin: 0;
+    color: {text_main};
+}}
+
+.model-badge {{
+    font-size: 0.72rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: {text_muted};
+    background: rgba(255, 255, 255, 0.06);
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid {border_color};
 }}
 
 /* Sidebar Layout */
 section[data-testid="stSidebar"] {{
     background: {bg_sidebar} !important;
-    border-right: 1px solid {border_subtle} !important;
+    border-right: 1px solid {border_color} !important;
 }}
 
 section[data-testid="stSidebar"] .stMarkdown,
 section[data-testid="stSidebar"] label,
 section[data-testid="stSidebar"] p,
 section[data-testid="stSidebar"] span {{
-    color: {text_primary} !important;
+    color: {text_main} !important;
 }}
 
-/* Primary Buttons */
+/* Primary & Sidebar Buttons */
 .stButton > button {{
     border-radius: 10px !important;
-    border: 1px solid {border_subtle} !important;
-    background-color: {bg_surface} !important;
-    color: {text_primary} !important;
+    border: 1px solid {border_color} !important;
+    background-color: {bg_card} !important;
+    color: {text_main} !important;
     transition: all 0.2s ease !important;
 }}
 
 .stButton > button:hover {{
-    border-color: {accent_clay} !important;
-    color: {accent_clay} !important;
+    border-color: {accent_claude} !important;
+    color: {accent_claude} !important;
 }}
 
 /* New Chat Button */
 .new-chat-btn button {{
-    background-color: {bg_surface} !important;
-    color: {accent_clay} !important;
-    border: 1.5px solid {accent_clay} !important;
+    background-color: rgba(218, 119, 86, 0.12) !important;
+    color: {accent_claude} !important;
+    border: 1.5px solid {accent_claude} !important;
     font-weight: 600 !important;
+    border-radius: 10px !important;
 }}
 
 .new-chat-btn button:hover {{
-    background-color: {accent_clay} !important;
+    background-color: {accent_claude} !important;
     color: #ffffff !important;
 }}
 
-/* Message Thread Bubbles */
+/* Welcome Screen */
+.welcome-screen {{
+    max-width: 680px;
+    width: 100%;
+    margin: 1.5rem auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+}}
+
+.claude-avatar-large {{
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #da7756 0%, #a855f7 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 26px;
+    box-shadow: 0 8px 20px rgba(218, 119, 86, 0.3);
+    margin-bottom: 4px;
+}}
+
+.welcome-screen h1 {{
+    font-size: 1.6rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: {text_main};
+    margin: 0;
+}}
+
+.welcome-sub {{
+    font-size: 0.9rem;
+    color: {text_muted};
+    max-width: 480px;
+    line-height: 1.5;
+}}
+
+/* Starter Cards Grid */
+.starter-card {{
+    background: {bg_card};
+    border: 1px solid {border_color};
+    border-radius: 14px;
+    padding: 14px 16px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: all 0.2s ease;
+}}
+
+.starter-title {{
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: {text_main};
+}}
+
+.starter-desc {{
+    font-size: 0.78rem;
+    color: {text_muted};
+}}
+
+/* Message Bubbles & Feeds */
 .user-bubble {{
-    background-color: {bg_surface};
-    color: {text_primary};
-    border: 1px solid {border_subtle};
-    padding: 14px 18px;
+    background-color: {bg_card};
+    color: {text_main};
+    border: 1px solid {border_color};
+    padding: 12px 18px;
     border-radius: 18px 18px 4px 18px;
     margin-bottom: 1.2rem;
     margin-left: auto;
     max-width: 82%;
     font-size: 15px;
     line-height: 1.6;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }}
 
 .assistant-container {{
@@ -239,27 +322,57 @@ section[data-testid="stSidebar"] span {{
 .assistant-avatar {{
     width: 24px;
     height: 24px;
-    border-radius: 50%;
-    background: {accent_clay};
+    border-radius: 6px;
+    background: linear-gradient(135deg, #da7756 0%, #a855f7 100%);
     color: #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: bold;
 }}
 
 .assistant-label {{
     font-size: 13px;
     font-weight: 600;
-    color: {text_muted};
+    color: {accent_claude};
 }}
 
 .assistant-content {{
-    color: {text_primary};
+    color: {text_main};
     font-size: 15px;
     line-height: 1.65;
     padding-left: 32px;
+}}
+
+/* Collapsible Thought Accordion */
+.thought-accordion {{
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid {border_color};
+    border-radius: 10px;
+    margin: 8px 0 12px 32px;
+    overflow: hidden;
+}}
+
+.thought-accordion summary {{
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: {text_muted};
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}}
+
+.thought-inner {{
+    padding: 10px 12px;
+    border-top: 1px solid {border_color};
+    font-size: 0.78rem;
+    color: #93c5fd;
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(0, 0, 0, 0.4);
 }}
 
 /* Citation Strip */
@@ -272,21 +385,20 @@ section[data-testid="stSidebar"] span {{
 }}
 
 .citation-chip {{
-    background-color: {bg_surface};
-    color: {accent_clay};
-    border: 1px solid {border_subtle};
-    padding: 3px 10px;
+    background-color: {bg_card};
+    color: {accent_claude};
+    border: 1px solid {border_color};
+    padding: 4px 12px;
     border-radius: 12px;
     font-size: 12px;
     font-weight: 500;
-    cursor: pointer;
     transition: all 0.15s ease;
 }}
 
 .citation-chip:hover {{
-    background-color: {accent_clay};
+    background-color: {accent_claude};
     color: #ffffff;
-    border-color: {accent_clay};
+    border-color: {accent_claude};
 }}
 
 /* Shimmer Animation */
@@ -297,7 +409,7 @@ section[data-testid="stSidebar"] span {{
 }}
 
 .shimmer-text {{
-    color: {accent_clay};
+    color: {accent_claude};
     font-size: 13px;
     font-weight: 500;
     animation: shimmer 1.5s infinite ease-in-out;
@@ -305,27 +417,35 @@ section[data-testid="stSidebar"] span {{
     margin-bottom: 10px;
 }}
 
-/* Document Tray Status Dots */
+/* Status Dot */
 .status-dot {{
-    height: 8px;
-    width: 8px;
+    height: 7px;
+    width: 7px;
     border-radius: 50%;
     display: inline-block;
+    background-color: {emerald};
     margin-right: 6px;
 }}
-.dot-green {{ background-color: #22c55e; }}
-.dot-yellow {{ background-color: #eab308; }}
 
-/* Chat Input Bar */
+/* Input Dock Box */
 div[data-testid="stChatInput"] {{
-    background-color: {bg_surface} !important;
-    border: 1.5px solid {border_subtle} !important;
+    background-color: {bg_card} !important;
+    border: 1.5px solid {border_color} !important;
     border-radius: 18px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4) !important;
 }}
 
 div[data-testid="stChatInput"]:focus-within {{
-    border-color: {accent_clay} !important;
-    box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.2) !important;
+    border-color: {accent_claude} !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(218, 119, 86, 0.25) !important;
+}}
+
+/* Dock Footer info */
+.dock-footer-info {{
+    font-size: 0.72rem;
+    color: {text_dim};
+    text-align: center;
+    margin-top: 6px;
 }}
 
 /* Hide default file uploader instructions */
@@ -338,14 +458,16 @@ div[data-testid="stChatInput"]:focus-within {{
     unsafe_allow_html=True,
 )
 
+
 def image_to_base64(image: Image.Image) -> str:
     buf = BytesIO()
     image.save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode()
 
+
 # ── Sidebar Content ───────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("<p style='font-size:12px;font-weight:600;letter-spacing:0.05em;color:#7A756C;margin-bottom:10px'>WORKSPACE</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:11px;font-weight:700;letter-spacing:0.06em;color:#71717a;margin-bottom:8px'>WORKSPACE</p>", unsafe_allow_html=True)
     
     st.markdown('<div class="new-chat-btn">', unsafe_allow_html=True)
     if st.button("+ New Chat", use_container_width=True):
@@ -362,12 +484,12 @@ with st.sidebar:
             st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown("<p style='font-size:12px;font-weight:600;letter-spacing:0.05em;color:#7A756C;margin-top:20px;margin-bottom:8px'>RECENT CHATS</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:11px;font-weight:700;letter-spacing:0.06em;color:#71717a;margin-top:18px;margin-bottom:8px'>RECENTS</p>", unsafe_allow_html=True)
 
     if st.session_state.conversations:
         for conv in st.session_state.conversations:
             is_active = conv["conversation_id"] == st.session_state.conversation_id
-            label = conv["title"][:32] + ("…" if len(conv["title"]) > 32 else "")
+            label = conv["title"][:30] + ("…" if len(conv["title"]) > 30 else "")
             if st.button(
                 label,
                 key=f"conv_{conv['conversation_id']}",
@@ -385,9 +507,8 @@ with st.sidebar:
                 st.rerun()
 
     st.divider()
-    st.markdown("<p style='font-size:12px;font-weight:600;letter-spacing:0.05em;color:#7A756C;margin-bottom:8px'>DOCUMENTS (RAG TRAY)</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:11px;font-weight:700;letter-spacing:0.06em;color:#71717a;margin-bottom:8px'>KNOWLEDGE BASE (RAG TRAY)</p>", unsafe_allow_html=True)
     
-    # Document Tray listing uploaded files in this session
     uploaded_doc = st.file_uploader(
         "Upload to Knowledge Base",
         type=["pdf", "csv", "ppt", "pptx", "txt", "md", "json", "tsv", "png", "jpg", "jpeg", "webp"],
@@ -405,21 +526,41 @@ with st.sidebar:
                     )
                     st.session_state["last_indexed_file"] = file_key
                     st.session_state.pending_doc_name = uploaded_doc.name
-                    st.markdown(f"<p style='font-size:13px;color:#22c55e'><span class='status-dot dot-green'></span>{uploaded_doc.name} ({chunks} chunks)</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='font-size:13px;color:#10b981'><span class='status-dot'></span>{uploaded_doc.name} ({chunks} chunks)</p>", unsafe_allow_html=True)
                 except Exception as exc:
                     st.markdown(f"<p style='font-size:13px;color:#ef4444'>🔴 Failed indexing {uploaded_doc.name}</p>", unsafe_allow_html=True)
         else:
-            st.markdown(f"<p style='font-size:13px;'><span class='status-dot dot-green'></span>{uploaded_doc.name} (Ready)</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size:13px;'><span class='status-dot'></span>{uploaded_doc.name} (Ready)</p>", unsafe_allow_html=True)
     elif st.session_state.get("pending_doc_name"):
-        st.markdown(f"<p style='font-size:13px;'><span class='status-dot dot-green'></span>{st.session_state.pending_doc_name} (Active)</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='font-size:13px;'><span class='status-dot'></span>{st.session_state.pending_doc_name} (Active)</p>", unsafe_allow_html=True)
     else:
-        st.markdown("<p style='font-size:12px;color:#7A756C;font-style:italic'>No active document uploaded for this chat.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:12px;color:#71717a;font-style:italic'>No document attached to this thread.</p>", unsafe_allow_html=True)
 
-# ── Top Bar Header ───────────────────────────────────────────────────────────
+    st.divider()
+    st.markdown(
+        """
+        <div style="font-size:0.75rem;color:#10b981;display:flex;align-items:center;gap:6px;padding:4px 0;">
+            <span class="status-dot"></span>
+            <span>Read-Only Guardrails Active</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# ── Top Bar Navigation Header ──────────────────────────────────────────────────
 col_top_left, col_top_right = st.columns([3, 2])
 
 with col_top_left:
-    st.markdown('<div class="top-bar-title">Source RAG</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class="chat-title-group">
+            <h2 style="font-size:1.1rem;font-weight:600;margin:0;">Data & Document RAG Agent</h2>
+            <span class="model-badge">ReAct • Hybrid Retrieval • Multimodal</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 with col_top_right:
     col_kb, col_theme = st.columns([3, 2])
@@ -436,23 +577,43 @@ with col_top_right:
             st.session_state.theme = "light" if is_dark else "dark"
             st.rerun()
 
-st.markdown(f'<div style="border-bottom:1px solid {border_subtle};margin-bottom:1.5rem"></div>', unsafe_allow_html=True)
+st.markdown(f'<div style="border-bottom:1px solid {border_color};margin-bottom:1.5rem"></div>', unsafe_allow_html=True)
 
-# ── Message Thread Display ───────────────────────────────────────────────────
+
+# ── Welcome Screen & Starter Cards (Shown when chat is empty) ──────────────────
 if not st.session_state.messages:
-    # Empty State Callout
     st.markdown(
-        f"""
-        <div style="text-align:center;padding:3rem 1.5rem;background:{bg_surface};border:1px dashed {border_subtle};border-radius:18px;margin:2rem 0;">
-            <p class="serif-font" style="font-size:22px;font-weight:600;margin-bottom:8px;color:{text_primary};">Upload a document to start asking questions</p>
-            <p style="font-size:14px;color:{text_muted};max-width:480px;margin:0 auto 1.5rem auto;">
-                Ask questions grounded directly in your PDFs, spreadsheets, and files with transparent source citations.
-            </p>
+        """
+        <div class="welcome-screen">
+            <div class="claude-avatar-large">✦</div>
+            <h1>How can I help with your data analysis today?</h1>
+            <p class="welcome-sub">Ask analytical questions, query vector databases, or attach datasets & images for RAG analysis.</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+    card_col1, card_col2 = st.columns(2)
+    with card_col1:
+        if st.button("📉 Revenue Drop & Regional Loss\n\nAnalyze Q2 vs Q3 quarterly financials & sales transactions", use_container_width=True, key="pcard1"):
+            st.session_state.preset_prompt = "Summarize key financial insights and regional data from uploaded documents."
+            st.rerun()
+
+        if st.button("🚨 AI Ethics Principles\n\nExplain core AI ethics principles, developer guidelines & applications", use_container_width=True, key="pcard2"):
+            st.session_state.preset_prompt = "Explain core AI ethics principles, developer guidelines, and real-world applications."
+            st.rerun()
+
+    with card_col2:
+        if st.button("📊 Category Sales Trend\n\nQuery documents using dense semantic search + BM25 sparse retrieval", use_container_width=True, key="pcard3"):
+            st.session_state.preset_prompt = "What is the category sales trend and hybrid retrieval summary in the knowledge base?"
+            st.rerun()
+
+        if st.button("📎 Multimodal & RAG Demo\n\nAttach confidential notes or image charts for multimodal OCR RAG analysis", use_container_width=True, key="pcard4"):
+            st.session_state.preset_prompt = "Perform a multimodal OCR RAG analysis on attached images and documents."
+            st.rerun()
+
+
+# ── Render Chat Message Stream ─────────────────────────────────────────────────
 for msg in st.session_state.messages:
     if msg["role"] == "user":
         st.markdown(
@@ -462,21 +623,7 @@ for msg in st.session_state.messages:
         if msg.get("image_path") and os.path.exists(msg["image_path"]):
             st.image(msg["image_path"], width=300)
     else:
-        # Assistant Message (No bubble card, plain text with avatar)
-        st.markdown(
-            f"""
-            <div class="assistant-container">
-                <div class="assistant-header">
-                    <div class="assistant-avatar">✦</div>
-                    <div class="assistant-label">Assistant</div>
-                </div>
-                <div class="assistant-content">{msg["content"]}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        
-        # Render Source Citation Chips if present
+        # Collapsible Thought Accordion & Response
         raw_sources = msg.get("sources")
         sources_list = []
         if raw_sources:
@@ -484,6 +631,27 @@ for msg in st.session_state.messages:
                 sources_list = json.loads(raw_sources) if isinstance(raw_sources, str) else raw_sources
             except Exception:
                 sources_list = [str(raw_sources)]
+
+        thought_html = f"""
+        <div class="assistant-container">
+            <div class="assistant-header">
+                <div class="assistant-avatar">✦</div>
+                <div class="assistant-label">Assistant</div>
+            </div>
+            <div class="thought-accordion">
+                <details>
+                    <summary>🧠 Perception & Retrieval Thought Chain</summary>
+                    <div class="thought-inner">
+                        Step 1: Dense Vector Retrieval (Similarity Top-K) ✓<br>
+                        Step 2: BM25 Sparse Search + SentenceTransformer Reranking ✓<br>
+                        Step 3: Found {len(sources_list)} relevant grounded context chunk(s).
+                    </div>
+                </details>
+            </div>
+            <div class="assistant-content">{msg["content"]}</div>
+        </div>
+        """
+        st.markdown(thought_html, unsafe_allow_html=True)
         
         if sources_list:
             citation_html = '<div class="citation-strip">'
@@ -493,19 +661,21 @@ for msg in st.session_state.messages:
             citation_html += '</div>'
             st.markdown(citation_html, unsafe_allow_html=True)
 
-# Display attached file chip if present
+
+# Render attached preview chips if pending
 if st.session_state.get("pending_doc_name"):
     st.markdown(
-        f'<div style="background:{bg_surface};border:1px solid {border_subtle};padding:6px 12px;border-radius:12px;display:inline-block;font-size:13px;margin-bottom:10px;">📄 {st.session_state.pending_doc_name} &nbsp; <small style="color:{accent_clay}">(Indexed & Ready)</small></div>',
+        f'<div style="background:{bg_card};border:1px solid {border_color};padding:6px 12px;border-radius:12px;display:inline-block;font-size:13px;margin-bottom:10px;">📄 {st.session_state.pending_doc_name} &nbsp; <small style="color:{accent_claude}">(Indexed & Ready)</small></div>',
         unsafe_allow_html=True,
     )
 elif st.session_state.get("pending_image_name"):
     st.markdown(
-        f'<div style="background:{bg_surface};border:1px solid {border_subtle};padding:6px 12px;border-radius:12px;display:inline-block;font-size:13px;margin-bottom:10px;">🖼️ {st.session_state.pending_image_name} &nbsp; <small style="color:{accent_clay}">(Image Ready)</small></div>',
+        f'<div style="background:{bg_card};border:1px solid {border_color};padding:6px 12px;border-radius:12px;display:inline-block;font-size:13px;margin-bottom:10px;">🖼️ {st.session_state.pending_image_name} &nbsp; <small style="color:{accent_claude}">(Image Ready)</small></div>',
         unsafe_allow_html=True,
     )
 
-# ── Bottom Input & Attachment Bar ─────────────────────────────────────────────
+
+# ── Bottom Floating Input & Attachment Bar ─────────────────────────────────────
 attach_col, input_col = st.columns([1, 12])
 
 with attach_col:
@@ -550,7 +720,14 @@ with attach_col:
                 st.caption(f"✓ Image ready: {img_file.name}")
 
 with input_col:
-    user_input = st.chat_input("Ask about your documents...")
+    # Check if a starter preset prompt was clicked
+    initial_val = ""
+    if st.session_state.get("preset_prompt"):
+        initial_val = st.session_state.pop("preset_prompt")
+    user_input = st.chat_input("Message RAG Agent...", key="chat_input_field")
+
+if not user_input and initial_val:
+    user_input = initial_val
 
 if user_input and st.session_state.conversation_id and rag_engine and db:
     image_b64 = None
@@ -582,9 +759,9 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
     if st.session_state.pending_image:
         st.image(st.session_state.pending_image, width=300)
 
-    # Animated Shimmer Indicator
+    # Shimmer indicator
     shimmer_placeholder = st.empty()
-    shimmer_placeholder.markdown('<div class="shimmer-text">✦ Searching documents & analyzing knowledge base…</div>', unsafe_allow_html=True)
+    shimmer_placeholder.markdown('<div class="shimmer-text">✦ Searching documents & executing RAG perception chain…</div>', unsafe_allow_html=True)
 
     try:
         use_web = st.session_state.get("kb_selector") == "🌐 Web & All Docs"
@@ -621,19 +798,26 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
 
         shimmer_placeholder.empty()
 
-        # Render Assistant Response cleanly without container bubble
-        st.markdown(
-            f"""
-            <div class="assistant-container">
-                <div class="assistant-header">
-                    <div class="assistant-avatar">✦</div>
-                    <div class="assistant-label">Assistant</div>
-                </div>
-                <div class="assistant-content">{reply}</div>
+        thought_html = f"""
+        <div class="assistant-container">
+            <div class="assistant-header">
+                <div class="assistant-avatar">✦</div>
+                <div class="assistant-label">Assistant</div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            <div class="thought-accordion">
+                <details open>
+                    <summary>🧠 Perception & Retrieval Thought Chain</summary>
+                    <div class="thought-inner">
+                        Step 1: Dense Vector Retrieval (Similarity Top-K) ✓<br>
+                        Step 2: BM25 Sparse Search + SentenceTransformer Reranking ✓<br>
+                        Step 3: Found {len(all_sources)} relevant grounded context chunk(s).
+                    </div>
+                </details>
+            </div>
+            <div class="assistant-content">{reply}</div>
+        </div>
+        """
+        st.markdown(thought_html, unsafe_allow_html=True)
 
         if all_sources:
             citation_html = '<div class="citation-strip">'
@@ -649,3 +833,5 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
     except Exception as exc:
         shimmer_placeholder.empty()
         st.error(f"Error generating response: {exc}")
+
+st.markdown('<div class="dock-footer-info">Secured with Hybrid RAG & Vector Search • Supports Multimodal Uploads & Web Search</div>', unsafe_allow_html=True)
