@@ -507,7 +507,7 @@ with st.sidebar:
                 st.rerun()
 
     st.divider()
-    st.markdown("<p style='font-size:11px;font-weight:700;letter-spacing:0.06em;color:#71717a;margin-bottom:8px'>KNOWLEDGE BASE (RAG TRAY)</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:11px;font-weight:700;letter-spacing:0.06em;color:#71717a;margin-bottom:8px'>UPLOAD YOUR DOCUMENT</p>", unsafe_allow_html=True)
     
     uploaded_doc = st.file_uploader(
         "Upload to Knowledge Base",
