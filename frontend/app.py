@@ -602,24 +602,7 @@ if not st.session_state.messages:
         unsafe_allow_html=True,
     )
 
-    card_col1, card_col2 = st.columns(2)
-    with card_col1:
-        if st.button("📉 Revenue Drop & Regional Loss\n\nAnalyze Q2 vs Q3 quarterly financials & sales transactions", use_container_width=True, key="pcard1"):
-            st.session_state.preset_prompt = "Summarize key financial insights and regional data from uploaded documents."
-            st.rerun()
 
-        if st.button("🚨 AI Ethics Principles\n\nExplain core AI ethics principles, developer guidelines & applications", use_container_width=True, key="pcard2"):
-            st.session_state.preset_prompt = "Explain core AI ethics principles, developer guidelines, and real-world applications."
-            st.rerun()
-
-    with card_col2:
-        if st.button("📊 Category Sales Trend\n\nQuery documents using dense semantic search + BM25 sparse retrieval", use_container_width=True, key="pcard3"):
-            st.session_state.preset_prompt = "What is the category sales trend and hybrid retrieval summary in the knowledge base?"
-            st.rerun()
-
-        if st.button("📎 Multimodal & RAG Demo\n\nAttach confidential notes or image charts for multimodal OCR RAG analysis", use_container_width=True, key="pcard4"):
-            st.session_state.preset_prompt = "Perform a multimodal OCR RAG analysis on attached images and documents."
-            st.rerun()
 
 
 # ── Render Chat Message Stream ─────────────────────────────────────────────────
