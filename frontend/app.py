@@ -549,32 +549,14 @@ with st.sidebar:
 
 
 # ── Top Bar Navigation Header ──────────────────────────────────────────────────
-col_top_left, col_top_right = st.columns([3, 2])
-
-with col_top_left:
-    st.markdown(
-        """
-        <div class="chat-title-group">
-            <h2 style="font-size:1.1rem;font-weight:600;margin:0;">RAG Analysis Agent</h2>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with col_top_right:
-    col_kb, col_theme = st.columns([3, 2])
-    with col_kb:
-        kb_option = st.selectbox(
-            "Knowledge Base",
-            ["📚 Current Chat Docs", "🌐 Web & All Docs"],
-            label_visibility="collapsed",
-            key="kb_selector",
-        )
-    with col_theme:
-        theme_icon = "☀️ Light" if is_dark else "🌙 Dark"
-        if st.button(theme_icon, use_container_width=True):
-            st.session_state.theme = "light" if is_dark else "dark"
-            st.rerun()
+st.markdown(
+    """
+    <div class="chat-title-group">
+        <h2 style="font-size:1.1rem;font-weight:600;margin:0;">RAG Analysis Agent</h2>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 st.markdown(f'<div style="border-bottom:1px solid {border_color};margin-bottom:1.5rem"></div>', unsafe_allow_html=True)
 
@@ -826,4 +808,4 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
         shimmer_placeholder.empty()
         st.error(f"Error generating response: {exc}")
 
-st.markdown('<div class="dock-footer-info">Secured with Hybrid RAG & Vector Search • Supports Multimodal Uploads & Web Search</div>', unsafe_allow_html=True)
+
