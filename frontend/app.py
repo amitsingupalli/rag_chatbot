@@ -581,11 +581,21 @@ st.markdown(f'<div style="border-bottom:1px solid {border_color};margin-bottom:1
 
 # ── Welcome Screen & Starter Cards (Shown when chat is empty) ──────────────────
 if not st.session_state.messages:
+    current_hour = datetime.now().hour
+    if 5 <= current_hour < 12:
+        greeting = "Good morning! What are we doing today?"
+    elif 12 <= current_hour < 17:
+        greeting = "Good afternoon! How can I help you today?"
+    elif 17 <= current_hour < 22:
+        greeting = "Good evening! How can I help you today?"
+    else:
+        greeting = "Good night! How can I assist with your analysis?"
+
     st.markdown(
-        """
+        f"""
         <div class="welcome-screen">
             <div class="claude-avatar-large">✦</div>
-            <h1>How can I help with your data analysis today?</h1>
+            <h1>{greeting}</h1>
             <p class="welcome-sub">Upload your documents, ask intelligent questions, and get precise context-aware answers with transparent citations.</p>
         </div>
         """,
