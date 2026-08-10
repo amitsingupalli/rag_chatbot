@@ -457,16 +457,23 @@ div[data-testid="stPopover"] > button:hover {{
     transform: scale(1.05) !important;
 }}
 
+/* Fixed Bottom Dock Container (Claude & Gemini style) */
+div[data-testid="stBottom"] {{
+    background: linear-gradient(180deg, rgba(24, 24, 27, 0) 0%, rgba(24, 24, 27, 0.92) 30%, {bg_app} 100%) !important;
+    padding-bottom: 0.8rem !important;
+    padding-top: 0.5rem !important;
+}}
+
 div[data-testid="stChatInput"] {{
     background-color: {bg_card} !important;
     border: 1.5px solid {border_color} !important;
     border-radius: 18px !important;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
 }}
 
 div[data-testid="stChatInput"]:focus-within {{
     border-color: {accent_claude} !important;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(218, 119, 86, 0.25) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 15px rgba(218, 119, 86, 0.25) !important;
 }}
 
 /* Dock Footer info */
