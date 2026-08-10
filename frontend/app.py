@@ -727,7 +727,7 @@ with input_col:
     initial_val = ""
     if st.session_state.get("preset_prompt"):
         initial_val = st.session_state.pop("preset_prompt")
-    user_input = st.chat_input("Message RAG Agent...", key="chat_input_field")
+    user_input = st.chat_input("Ask Anything", key="chat_input_field")
 
 if not user_input and initial_val:
     user_input = initial_val
