@@ -427,7 +427,36 @@ section[data-testid="stSidebar"] span {{
     margin-right: 6px;
 }}
 
-/* Input Dock Box */
+/* Input Dock Box & Inline Attachment Pin */
+div[data-testid="stPopover"] {
+    display: flex !important;
+    align-items: center !important;
+}
+
+div[data-testid="stPopover"] > button {
+    border-radius: 14px !important;
+    background-color: {bg_card} !important;
+    border: 1.5px solid {border_color} !important;
+    color: {accent_claude} !important;
+    font-size: 1.15rem !important;
+    padding: 0 14px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-top: 2px !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+div[data-testid="stPopover"] > button:hover {
+    border-color: {accent_claude} !important;
+    background-color: rgba(218, 119, 86, 0.18) !important;
+    color: #ffffff !important;
+    transform: scale(1.05) !important;
+}
+
 div[data-testid="stChatInput"] {{
     background-color: {bg_card} !important;
     border: 1.5px solid {border_color} !important;
@@ -653,7 +682,7 @@ elif st.session_state.get("pending_image_name"):
 attach_col, input_col = st.columns([1, 12])
 
 with attach_col:
-    with st.popover("+", help="Attach document or image"):
+    with st.popover("📌", help="Attach Documents or Images to Chat"):
         st.markdown("<p style='font-size:13px;font-weight:600;margin-bottom:6px'>Add Attachment</p>", unsafe_allow_html=True)
         tab_doc, tab_img = st.tabs(["📄 Document", "🖼️ Image"])
 
