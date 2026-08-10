@@ -428,12 +428,12 @@ section[data-testid="stSidebar"] span {{
 }}
 
 /* Input Dock Box & Inline Attachment Pin */
-div[data-testid="stPopover"] {
+div[data-testid="stPopover"] {{
     display: flex !important;
     align-items: center !important;
-}
+}}
 
-div[data-testid="stPopover"] > button {
+div[data-testid="stPopover"] > button {{
     border-radius: 14px !important;
     background-color: {bg_card} !important;
     border: 1.5px solid {border_color} !important;
@@ -448,14 +448,14 @@ div[data-testid="stPopover"] > button {
     margin-top: 2px !important;
     transition: all 0.2s ease !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
-}
+}}
 
-div[data-testid="stPopover"] > button:hover {
+div[data-testid="stPopover"] > button:hover {{
     border-color: {accent_claude} !important;
     background-color: rgba(218, 119, 86, 0.18) !important;
     color: #ffffff !important;
     transform: scale(1.05) !important;
-}
+}}
 
 div[data-testid="stChatInput"] {{
     background-color: {bg_card} !important;
