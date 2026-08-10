@@ -427,41 +427,10 @@ section[data-testid="stSidebar"] span {{
     margin-right: 6px;
 }}
 
-/* Input Dock Box & Inline Attachment Pin */
-div[data-testid="stPopover"] {{
-    display: flex !important;
-    align-items: center !important;
-}}
-
-div[data-testid="stPopover"] > button {{
-    border-radius: 14px !important;
-    background-color: {bg_card} !important;
-    border: 1.5px solid {border_color} !important;
-    color: {accent_claude} !important;
-    font-size: 1.15rem !important;
-    padding: 0 14px !important;
-    height: 48px !important;
-    min-width: 48px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    margin-top: 2px !important;
-    transition: all 0.2s ease !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
-}}
-
-div[data-testid="stPopover"] > button:hover {{
-    border-color: {accent_claude} !important;
-    background-color: rgba(218, 119, 86, 0.18) !important;
-    color: #ffffff !important;
-    transform: scale(1.05) !important;
-}}
-
 /* Fixed Bottom Dock Container (Claude & Gemini style) */
 div[data-testid="stBottom"] {{
-    background: linear-gradient(180deg, rgba(24, 24, 27, 0) 0%, rgba(24, 24, 27, 0.92) 30%, {bg_app} 100%) !important;
-    padding-bottom: 0.8rem !important;
-    padding-top: 0.5rem !important;
+    background: linear-gradient(180deg, rgba(24, 24, 27, 0) 0%, rgba(24, 24, 27, 0.95) 40%, {bg_app} 100%) !important;
+    padding-bottom: 1rem !important;
 }}
 
 div[data-testid="stChatInput"] {{
@@ -648,16 +617,6 @@ for msg in st.session_state.messages:
                 <div class="assistant-avatar">✦</div>
                 <div class="assistant-label">Assistant</div>
             </div>
-            <div class="thought-accordion">
-                <details>
-                    <summary>🧠 Perception & Retrieval Thought Chain</summary>
-                    <div class="thought-inner">
-                        Step 1: Dense Vector Retrieval (Similarity Top-K) ✓<br>
-                        Step 2: BM25 Sparse Search + SentenceTransformer Reranking ✓<br>
-                        Step 3: Found {len(sources_list)} relevant grounded context chunk(s).
-                    </div>
-                </details>
-            </div>
             <div class="assistant-content">{msg["content"]}</div>
         </div>
         """
@@ -685,56 +644,12 @@ elif st.session_state.get("pending_image_name"):
     )
 
 
-# ── Bottom Floating Input & Attachment Bar ─────────────────────────────────────
-attach_col, input_col = st.columns([1, 12])
+# ── Native Fixed Bottom Chat Input ─────────────────────────────────────────────
+initial_val = ""
+if st.session_state.get("preset_prompt"):
+    initial_val = st.session_state.pop("preset_prompt")
 
-with attach_col:
-    with st.popover("📌", help="Attach Documents or Images to Chat"):
-        st.markdown("<p style='font-size:13px;font-weight:600;margin-bottom:6px'>Add Attachment</p>", unsafe_allow_html=True)
-        tab_doc, tab_img = st.tabs(["📄 Document", "🖼️ Image"])
-
-        with tab_doc:
-            doc_file = st.file_uploader(
-                "Upload Document",
-                type=["pdf", "csv", "ppt", "pptx", "txt", "md", "json", "tsv"],
-                label_visibility="collapsed",
-                key="chat_doc_uploader_segmented",
-            )
-            if doc_file and rag_engine and st.session_state.user_id:
-                file_key = f"doc_{doc_file.name}_{doc_file.size}_{st.session_state.conversation_id}"
-                if st.session_state.get("last_indexed_chat_file") != file_key:
-                    with st.spinner(f"Indexing {doc_file.name}…"):
-                        try:
-                            data = doc_file.read()
-                            chunks = rag_engine.ingestion.ingest_bytes(
-                                data, doc_file.name, st.session_state.user_id, st.session_state.conversation_id
-                            )
-                            st.session_state["last_indexed_chat_file"] = file_key
-                            st.session_state.pending_doc_name = doc_file.name
-                            st.caption(f"✓ Indexed {chunks} chunks from {doc_file.name}")
-                        except Exception as exc:
-                            st.error(f"Error indexing {doc_file.name}: {exc}")
-                else:
-                    st.caption(f"✓ {doc_file.name} ready")
-
-        with tab_img:
-            img_file = st.file_uploader(
-                "Upload Image",
-                type=["png", "jpg", "jpeg", "webp"],
-                label_visibility="collapsed",
-                key="chat_img_uploader_segmented",
-            )
-            if img_file:
-                st.session_state.pending_image = Image.open(img_file).convert("RGB")
-                st.session_state.pending_image_name = img_file.name
-                st.caption(f"✓ Image ready: {img_file.name}")
-
-with input_col:
-    # Check if a starter preset prompt was clicked
-    initial_val = ""
-    if st.session_state.get("preset_prompt"):
-        initial_val = st.session_state.pop("preset_prompt")
-    user_input = st.chat_input("Ask Anything", key="chat_input_field")
+user_input = st.chat_input("Ask Anything", key="chat_input_field")
 
 if not user_input and initial_val:
     user_input = initial_val
@@ -813,16 +728,6 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
             <div class="assistant-header">
                 <div class="assistant-avatar">✦</div>
                 <div class="assistant-label">Assistant</div>
-            </div>
-            <div class="thought-accordion">
-                <details open>
-                    <summary>🧠 Perception & Retrieval Thought Chain</summary>
-                    <div class="thought-inner">
-                        Step 1: Dense Vector Retrieval (Similarity Top-K) ✓<br>
-                        Step 2: BM25 Sparse Search + SentenceTransformer Reranking ✓<br>
-                        Step 3: Found {len(all_sources)} relevant grounded context chunk(s).
-                    </div>
-                </details>
             </div>
             <div class="assistant-content">{reply}</div>
         </div>
