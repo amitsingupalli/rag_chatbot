@@ -101,15 +101,9 @@ class AdvancedRAGEngine:
         except Exception as exc:
             logger.warning("BM25 retriever unavailable, using vector only: %s", exc)
 
-        try:
-            reranker = SentenceTransformerRerank(
-                model="cross-encoder/ms-marco-MiniLM-L-6-v2",
-                top_n=settings.rerank_top_n,
-            )
-            node_postprocessors = [reranker]
-        except Exception as exc:
-            logger.warning("Reranker unavailable: %s", exc)
-            node_postprocessors = []
+        node_postprocessors = []
+        self._reranker = None
+        self._reranker_initialized = False
 
         self.query_engine = RetrieverQueryEngine.from_args(
             retriever=retriever,
