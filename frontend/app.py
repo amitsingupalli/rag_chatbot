@@ -427,6 +427,38 @@ section[data-testid="stSidebar"] span {{
     margin-right: 6px;
 }}
 
+/* Sleek Left-Side Attachment + Button */
+div[data-testid="stPopover"] {{
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}}
+
+div[data-testid="stPopover"] > button {{
+    border-radius: 50% !important;
+    background-color: {bg_card} !important;
+    border: 1.5px solid {border_color} !important;
+    color: #ffffff !important;
+    font-size: 1.25rem !important;
+    font-weight: 500 !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.2s ease !important;
+    margin-top: 2px !important;
+}}
+
+div[data-testid="stPopover"] > button:hover {{
+    border-color: {accent_claude} !important;
+    background-color: {accent_claude} !important;
+    color: #ffffff !important;
+    transform: scale(1.08) !important;
+}}
+
 /* Fixed Bottom Dock Container (Claude & Gemini style) */
 div[data-testid="stBottom"] {{
     background: linear-gradient(180deg, rgba(24, 24, 27, 0) 0%, rgba(24, 24, 27, 0.95) 40%, {bg_app} 100%) !important;
@@ -616,12 +648,56 @@ elif st.session_state.get("pending_image_name"):
     )
 
 
-# ── Native Fixed Bottom Chat Input ─────────────────────────────────────────────
-initial_val = ""
-if st.session_state.get("preset_prompt"):
-    initial_val = st.session_state.pop("preset_prompt")
+# ── Floating Input Dock with Left-Side + Button ───────────────────────────────
+attach_col, input_col = st.columns([1, 14])
 
-user_input = st.chat_input("Ask Anything", key="chat_input_field")
+with attach_col:
+    with st.popover("+", help="Upload document or image"):
+        st.markdown("<p style='font-size:13px;font-weight:600;margin-bottom:6px'>Upload Attachment</p>", unsafe_allow_html=True)
+        tab_doc, tab_img = st.tabs(["📄 Document", "🖼️ Image"])
+
+        with tab_doc:
+            doc_file = st.file_uploader(
+                "Upload Document",
+                type=["pdf", "csv", "ppt", "pptx", "txt", "md", "json", "tsv"],
+                label_visibility="collapsed",
+                key="chat_doc_uploader_popover",
+            )
+            if doc_file and rag_engine and st.session_state.user_id:
+                file_key = f"doc_{doc_file.name}_{doc_file.size}_{st.session_state.conversation_id}"
+                if st.session_state.get("last_indexed_chat_file") != file_key:
+                    with st.spinner(f"Indexing {doc_file.name}…"):
+                        try:
+                            data = doc_file.read()
+                            chunks = rag_engine.ingestion.ingest_bytes(
+                                data, doc_file.name, st.session_state.user_id, st.session_state.conversation_id
+                            )
+                            st.session_state["last_indexed_chat_file"] = file_key
+                            st.session_state.pending_doc_name = doc_file.name
+                            st.caption(f"✓ Indexed {chunks} chunks from {doc_file.name}")
+                        except Exception as exc:
+                            st.error(f"Error indexing {doc_file.name}: {exc}")
+                else:
+                    st.caption(f"✓ {doc_file.name} ready")
+
+        with tab_img:
+            img_file = st.file_uploader(
+                "Upload Image",
+                type=["png", "jpg", "jpeg", "webp"],
+                label_visibility="collapsed",
+                key="chat_img_uploader_popover",
+            )
+            if img_file:
+                st.session_state.pending_image = Image.open(img_file).convert("RGB")
+                st.session_state.pending_image_name = img_file.name
+                st.caption(f"✓ Image ready: {img_file.name}")
+
+with input_col:
+    initial_val = ""
+    if st.session_state.get("preset_prompt"):
+        initial_val = st.session_state.pop("preset_prompt")
+
+    user_input = st.chat_input("Ask Anything", key="chat_input_field")
 
 if not user_input and initial_val:
     user_input = initial_val
