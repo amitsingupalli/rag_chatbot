@@ -21,12 +21,12 @@ SUPPORTED_IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif
 
 def extract_text_from_image(image: Image.Image) -> str:
     if not TESSERACT_AVAILABLE:
-        return "[OCR unavailable: install Tesseract OCR on your system]"
+        return ""
     try:
         text = pytesseract.image_to_string(image)
-        return text.strip() or "[No text detected in image]"
-    except Exception as exc:
-        return f"[OCR error: {exc}]"
+        return text.strip()
+    except Exception:
+        return ""
 
 
 def load_image_from_bytes(data: bytes) -> Image.Image:
