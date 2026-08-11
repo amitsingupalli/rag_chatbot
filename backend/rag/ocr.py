@@ -10,23 +10,50 @@ from PIL import Image
 
 try:
     import pytesseract
-
     TESSERACT_AVAILABLE = True
 except ImportError:
     TESSERACT_AVAILABLE = False
+
+try:
+    from paddleocr import PaddleOCR
+    PADDLE_AVAILABLE = True
+    _paddle_instance = None
+except ImportError:
+    PADDLE_AVAILABLE = False
+    _paddle_instance = None
 
 
 SUPPORTED_IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff"}
 
 
 def extract_text_from_image(image: Image.Image) -> str:
-    if not TESSERACT_AVAILABLE:
-        return ""
-    try:
-        text = pytesseract.image_to_string(image)
-        return text.strip()
-    except Exception:
-        return ""
+    # 1. Try PaddleOCR for highest table & document accuracy if installed
+    if PADDLE_AVAILABLE:
+        try:
+            global _paddle_instance
+            if _paddle_instance is None:
+                _paddle_instance = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
+            import numpy as np
+            img_np = np.array(image)
+            result = _paddle_instance.ocr(img_np, cls=True)
+            lines = []
+            if result and result[0]:
+                for line in result[0]:
+                    lines.append(line[1][0])
+            if lines:
+                return "\n".join(lines).strip()
+        except Exception:
+            pass
+
+    # 2. Fallback to Tesseract OCR
+    if TESSERACT_AVAILABLE:
+        try:
+            text = pytesseract.image_to_string(image)
+            return text.strip()
+        except Exception:
+            pass
+
+    return ""
 
 
 def load_image_from_bytes(data: bytes) -> Image.Image:
