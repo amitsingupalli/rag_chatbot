@@ -511,35 +511,7 @@ with st.sidebar:
                     st.session_state.messages = db.get_messages(conv["conversation_id"])
                 st.rerun()
 
-    st.divider()
-    st.markdown("<p style='font-size:11px;font-weight:700;letter-spacing:0.06em;color:#71717a;margin-bottom:8px'>UPLOAD YOUR DOCUMENT</p>", unsafe_allow_html=True)
-    
-    uploaded_doc = st.file_uploader(
-        "Upload to Knowledge Base",
-        type=["pdf", "csv", "ppt", "pptx", "txt", "md", "json", "tsv", "png", "jpg", "jpeg", "webp"],
-        label_visibility="collapsed",
-        key="sidebar_doc_uploader",
-    )
-    if uploaded_doc and st.session_state.user_id and rag_engine:
-        file_key = f"{uploaded_doc.name}_{uploaded_doc.size}_{st.session_state.conversation_id}"
-        if st.session_state.get("last_indexed_file") != file_key:
-            with st.spinner(f"Indexing {uploaded_doc.name}…"):
-                try:
-                    data = uploaded_doc.read()
-                    chunks = rag_engine.ingestion.ingest_bytes(
-                        data, uploaded_doc.name, st.session_state.user_id, st.session_state.conversation_id
-                    )
-                    st.session_state["last_indexed_file"] = file_key
-                    st.session_state.pending_doc_name = uploaded_doc.name
-                    st.markdown(f"<p style='font-size:13px;color:#10b981'><span class='status-dot'></span>{uploaded_doc.name} ({chunks} chunks)</p>", unsafe_allow_html=True)
-                except Exception as exc:
-                    st.markdown(f"<p style='font-size:13px;color:#ef4444'>🔴 Failed indexing {uploaded_doc.name}</p>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<p style='font-size:13px;'><span class='status-dot'></span>{uploaded_doc.name} (Ready)</p>", unsafe_allow_html=True)
-    elif st.session_state.get("pending_doc_name"):
-        st.markdown(f"<p style='font-size:13px;'><span class='status-dot'></span>{st.session_state.pending_doc_name} (Active)</p>", unsafe_allow_html=True)
-    else:
-        st.markdown("<p style='font-size:12px;color:#71717a;font-style:italic'>No document attached to this thread.</p>", unsafe_allow_html=True)
+
 
     st.divider()
     st.markdown(
