@@ -230,11 +230,13 @@ class AdvancedRAGEngine:
         use_web_search: bool | None = None,
     ) -> dict[str, Any]:
         enriched_message = message
+        pil_img = None
         if image_base64:
-            ocr_result = process_image_base64(image_base64)
-            enriched_message = (
-                f"{message}\n\n[Image OCR Content]\n{ocr_result['ocr_text']}"
-            )
+            try:
+                from backend.rag.ocr import load_image_from_base64
+                pil_img = load_image_from_base64(image_base64)
+            except Exception as img_err:
+                logger.warning("Failed loading image base64: %s", img_err)
 
         user_memory = self.memory.get_context(user_id)
         rag_context, sources = self._retrieve_context(enriched_message, user_id=user_id, conversation_id=conversation_id)
@@ -249,6 +251,35 @@ class AdvancedRAGEngine:
                     used_web = True
             except Exception as exc:
                 logger.warning("Web search failed: %s", exc)
+
+        # Handle multimodal image vision directly with Gemini
+        if pil_img:
+            try:
+                import google.generativeai as genai
+                gemini_key = os.getenv("GEMINI_API_KEY") or settings.gemini_api_key
+                genai.configure(api_key=gemini_key)
+                model_name = settings.gemini_model.replace("models/", "")
+                vision_model = genai.GenerativeModel(model_name)
+
+                vision_prompt = f"""{SYSTEM_PROMPT}
+
+Retrieved Context:
+{rag_context or '(none)'}
+
+User Query:
+{message}"""
+                vision_res = vision_model.generate_content([vision_prompt, pil_img])
+                reply = vision_res.text.strip()
+
+                self.memory.extract_and_store(user_id, message, reply)
+                return {
+                    "reply": reply,
+                    "sources": sources,
+                    "web_sources": web_sources,
+                    "used_web_search": used_web,
+                }
+            except Exception as vision_err:
+                logger.warning("Gemini Vision processing failed: %s", vision_err)
 
         history = self._build_chat_history(conversation_id)
 
