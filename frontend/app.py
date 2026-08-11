@@ -626,13 +626,7 @@ for msg in st.session_state.messages:
         """
         st.markdown(thought_html, unsafe_allow_html=True)
         
-        if sources_list:
-            citation_html = '<div class="citation-strip">'
-            for idx, src in enumerate(sources_list, start=1):
-                clean_src = os.path.basename(str(src))
-                citation_html += f'<span class="citation-chip">[{idx}] 📄 {clean_src}</span>'
-            citation_html += '</div>'
-            st.markdown(citation_html, unsafe_allow_html=True)
+
 
 
 # Render attached preview chips if pending
@@ -782,13 +776,7 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
         """
         st.markdown(thought_html, unsafe_allow_html=True)
 
-        if all_sources:
-            citation_html = '<div class="citation-strip">'
-            for idx, src in enumerate(all_sources, start=1):
-                clean_src = os.path.basename(str(src))
-                citation_html += f'<span class="citation-chip">[{idx}] 📄 {clean_src}</span>'
-            citation_html += '</div>'
-            st.markdown(citation_html, unsafe_allow_html=True)
+
 
         st.session_state.messages = db.get_messages(st.session_state.conversation_id)
         st.rerun()
