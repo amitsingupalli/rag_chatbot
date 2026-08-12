@@ -256,6 +256,45 @@ class IngestionPipeline:
         )
         return len(docs)
 
+    def ingest_docx(
+        self, file_path: Path, user_id: str | None = None, conversation_id: str | None = None
+    ) -> int:
+        paragraphs = []
+        try:
+            import docx
+
+            doc = docx.Document(str(file_path))
+            for p in doc.paragraphs:
+                if p.text and p.text.strip():
+                    paragraphs.append(p.text.strip())
+
+            for table in doc.tables:
+                for row in table.rows:
+                    row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                    if row_text:
+                        paragraphs.append(row_text)
+
+            full_text = "\n\n".join(paragraphs)
+            if not full_text.strip():
+                return 0
+
+            metadata = {
+                "source": file_path.name,
+                "type": "docx",
+                "user_id": user_id or "global",
+                "conversation_id": conversation_id or "global",
+            }
+            docs = self._build_documents_from_text(full_text, metadata)
+            VectorStoreIndex.from_documents(
+                docs,
+                storage_context=self._storage_context,
+                show_progress=False,
+            )
+            return len(docs)
+        except Exception as exc:
+            print(f"[Error] docx parsing failed: {exc}")
+            return 0
+
     def ingest_file(
         self, file_path: str | Path, user_id: str | None = None, conversation_id: str | None = None
     ) -> int:
@@ -265,6 +304,8 @@ class IngestionPipeline:
             return self.ingest_image(file_path, user_id, conversation_id)
         if suffix == ".pdf":
             return self.ingest_pdf(file_path, user_id, conversation_id)
+        if suffix in {".doc", ".docx"}:
+            return self.ingest_docx(file_path, user_id, conversation_id)
         if suffix in {".ppt", ".pptx"}:
             return self.ingest_pptx(file_path, user_id, conversation_id)
         if suffix in {".txt", ".md", ".csv", ".json", ".tsv"}:

@@ -653,7 +653,7 @@ with attach_col:
         with tab_doc:
             doc_file = st.file_uploader(
                 "Upload Document",
-                type=["pdf", "csv", "ppt", "pptx", "txt", "md", "json", "tsv"],
+                type=["pdf", "docx", "doc", "csv", "ppt", "pptx", "txt", "md", "json", "tsv"],
                 label_visibility="collapsed",
                 key="chat_doc_uploader_popover",
             )
