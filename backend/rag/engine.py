@@ -29,15 +29,15 @@ from backend.rag.web_search import search_web, should_search_web
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are a helpful, precise AI assistant.
-Respond directly, naturally, and concisely to the user's question using the provided context.
+SYSTEM_PROMPT = """You are a highly precise, detail-oriented RAG AI research assistant.
+Analyze all retrieved document context thoroughly and answer the user's question with maximum technical accuracy.
 
-CRITICAL INSTRUCTIONS:
-- Do NOT output your internal thinking, chunking process, or raw document extracts.
-- Do NOT repeat or dump raw retrieved context passages in your response.
-- Perform all document context analysis silently in the background and present ONLY your final, well-structured answer.
-- Format responses cleanly with markdown headings, bullet points, or paragraphs when helpful.
-- If the context does not contain enough information, state that clearly and directly."""
+CRITICAL PRECISION RULES:
+- ACCURACY ON NUMERICAL METRICS & DATASETS: Pay meticulous attention to exact numbers, dataset image counts (e.g., specific CT/PET image totals), sample sizes, and statistics in the text.
+- MULTI-STAGE WORKFLOW & PIPELINE DETAILS: Accurately capture every stage of multi-step model workflows, section descriptions, figure captions, and model execution steps (e.g., explicit multi-pass model runs in Stage 3 rather than over-simplifying them).
+- COMPLETE & DETAILED RESPONSES: Provide complete, fully fleshed-out explanations without truncating or cutting off steps mid-sentence.
+- Do NOT output internal chunking process or raw unformatted context dumps.
+- Format responses cleanly with markdown headings, bold terms, bullet points, and numbered lists when appropriate."""
 
 
 class AdvancedRAGEngine:
@@ -65,10 +65,11 @@ class AdvancedRAGEngine:
         self.llm = Gemini(
             model=model_name,
             api_key=gemini_key,
-            temperature=0.3,
+            temperature=0.2,
+            max_tokens=settings.max_tokens,
         )
         self.fallback_llm = None
-        logger.info("Using ONLY Google Gemini LLM with model %s", model_name)
+        logger.info("Using ONLY Google Gemini LLM with model %s (max_tokens=%d)", model_name, settings.max_tokens)
         Settings.llm = self.llm
 
         # Set up HuggingFace embeddings
@@ -268,7 +269,10 @@ Retrieved Context:
 
 User Query:
 {message}"""
-                vision_res = vision_model.generate_content([vision_prompt, pil_img])
+                vision_res = vision_model.generate_content(
+                    [vision_prompt, pil_img],
+                    generation_config={"max_output_tokens": settings.max_tokens}
+                )
                 reply = vision_res.text.strip()
 
                 self.memory.extract_and_store(user_id, message, reply)

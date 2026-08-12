@@ -29,10 +29,11 @@ class Settings(BaseSettings):
     data_dir: str = "./data"
     storage_dir: str = "./storage"
 
-    chunk_size: int = 512
-    chunk_overlap: int = 64
-    similarity_top_k: int = 5
-    rerank_top_n: int = 3
+    chunk_size: int = 1024
+    chunk_overlap: int = 204
+    similarity_top_k: int = 10
+    rerank_top_n: int = 5
+    max_tokens: int = 4096
     memory_token_limit: int = 3900
 
     web_search_enabled: bool = True
