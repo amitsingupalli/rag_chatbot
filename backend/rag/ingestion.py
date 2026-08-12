@@ -75,7 +75,29 @@ class IngestionPipeline:
         self, file_path: Path, user_id: str | None = None, conversation_id: str | None = None
     ) -> int:
         pages = []
-        if settings.llama_cloud_api_key:
+        # 1. Try DoclingReader for highest accuracy layout & table parsing
+        try:
+            from llama_index.readers.docling import DoclingReader
+            reader = DoclingReader()
+            docling_docs = reader.load_data(str(file_path))
+            for i, d in enumerate(docling_docs):
+                if d.text and d.text.strip():
+                    pages.append(
+                        Document(
+                            text=d.text,
+                            metadata={
+                                "source": file_path.name,
+                                "page": i + 1,
+                                "type": "docling_pdf",
+                                "user_id": user_id or "global",
+                                "conversation_id": conversation_id or "global",
+                            },
+                        )
+                    )
+        except Exception as docling_err:
+            print(f"[Warning] DoclingReader PDF parse failed: {docling_err}. Trying LlamaParse/PyPDF...")
+
+        if not pages and settings.llama_cloud_api_key:
             try:
                 from llama_parse import LlamaParse
 
