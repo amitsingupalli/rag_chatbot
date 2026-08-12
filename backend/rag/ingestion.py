@@ -295,6 +295,76 @@ class IngestionPipeline:
             print(f"[Error] docx parsing failed: {exc}")
             return 0
 
+    def ingest_xlsx(
+        self, file_path: Path, user_id: str | None = None, conversation_id: str | None = None
+    ) -> int:
+        sheet_texts = []
+        try:
+            import pandas as pd
+
+            excel = pd.ExcelFile(str(file_path))
+            for sheet_name in excel.sheet_names:
+                df = pd.read_excel(excel, sheet_name=sheet_name)
+                if not df.empty:
+                    csv_str = df.to_csv(index=False)
+                    sheet_texts.append(f"--- Sheet: {sheet_name} ---\n{csv_str}")
+
+            full_text = "\n\n".join(sheet_texts)
+            if not full_text.strip():
+                return 0
+
+            metadata = {
+                "source": file_path.name,
+                "type": "xlsx",
+                "user_id": user_id or "global",
+                "conversation_id": conversation_id or "global",
+            }
+            docs = self._build_documents_from_text(full_text, metadata)
+            VectorStoreIndex.from_documents(
+                docs,
+                storage_context=self._storage_context,
+                show_progress=False,
+            )
+            return len(docs)
+        except Exception as exc:
+            print(f"[Error] xlsx parsing failed: {exc}")
+            return 0
+
+    def ingest_html(
+        self, file_path: Path, user_id: str | None = None, conversation_id: str | None = None
+    ) -> int:
+        try:
+            from bs4 import BeautifulSoup
+
+            raw_html = file_path.read_text(encoding="utf-8", errors="ignore")
+            soup = BeautifulSoup(raw_html, "html.parser")
+            for script in soup(["script", "style"]):
+                script.decompose()
+
+            text = soup.get_text(separator="\n")
+            lines = (line.strip() for line in text.splitlines())
+            clean_text = "\n".join(chunk for chunk in lines if chunk)
+
+            if not clean_text.strip():
+                return 0
+
+            metadata = {
+                "source": file_path.name,
+                "type": "html",
+                "user_id": user_id or "global",
+                "conversation_id": conversation_id or "global",
+            }
+            docs = self._build_documents_from_text(clean_text, metadata)
+            VectorStoreIndex.from_documents(
+                docs,
+                storage_context=self._storage_context,
+                show_progress=False,
+            )
+            return len(docs)
+        except Exception as exc:
+            print(f"[Error] html parsing failed: {exc}")
+            return 0
+
     def ingest_file(
         self, file_path: str | Path, user_id: str | None = None, conversation_id: str | None = None
     ) -> int:
@@ -308,6 +378,10 @@ class IngestionPipeline:
             return self.ingest_docx(file_path, user_id, conversation_id)
         if suffix in {".ppt", ".pptx"}:
             return self.ingest_pptx(file_path, user_id, conversation_id)
+        if suffix in {".xls", ".xlsx"}:
+            return self.ingest_xlsx(file_path, user_id, conversation_id)
+        if suffix in {".html", ".htm"}:
+            return self.ingest_html(file_path, user_id, conversation_id)
         if suffix in {".txt", ".md", ".csv", ".json", ".tsv"}:
             return (
                 self.ingest_csv(file_path, user_id, conversation_id)
