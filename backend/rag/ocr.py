@@ -1,4 +1,4 @@
-"""OCR and image processing for multimodal RAG."""
+"""PaddleOCR and image processing for multimodal RAG."""
 
 from __future__ import annotations
 
@@ -7,12 +7,6 @@ import io
 from pathlib import Path
 
 from PIL import Image
-
-try:
-    import pytesseract
-    TESSERACT_AVAILABLE = True
-except ImportError:
-    TESSERACT_AVAILABLE = False
 
 try:
     from paddleocr import PaddleOCR
@@ -27,31 +21,24 @@ SUPPORTED_IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif
 
 
 def extract_text_from_image(image: Image.Image) -> str:
-    # 1. Try PaddleOCR for highest table & document accuracy if installed
-    if PADDLE_AVAILABLE:
-        try:
-            global _paddle_instance
-            if _paddle_instance is None:
-                _paddle_instance = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
-            import numpy as np
-            img_np = np.array(image)
-            result = _paddle_instance.ocr(img_np, cls=True)
-            lines = []
-            if result and result[0]:
-                for line in result[0]:
-                    lines.append(line[1][0])
-            if lines:
-                return "\n".join(lines).strip()
-        except Exception:
-            pass
-
-    # 2. Fallback to Tesseract OCR
-    if TESSERACT_AVAILABLE:
-        try:
-            text = pytesseract.image_to_string(image)
-            return text.strip()
-        except Exception:
-            pass
+    """Extract text using PaddleOCR as exclusive OCR engine for images and documents."""
+    if not PADDLE_AVAILABLE:
+        return ""
+    try:
+        global _paddle_instance
+        if _paddle_instance is None:
+            _paddle_instance = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
+        import numpy as np
+        img_np = np.array(image)
+        result = _paddle_instance.ocr(img_np, cls=True)
+        lines = []
+        if result and result[0]:
+            for line in result[0]:
+                lines.append(line[1][0])
+        if lines:
+            return "\n".join(lines).strip()
+    except Exception:
+        pass
 
     return ""
 
