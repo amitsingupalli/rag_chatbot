@@ -504,7 +504,67 @@ def image_to_base64(image: Image.Image) -> str:
 
 # ── Sidebar Content ───────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("<p style='font-size:11px;font-weight:700;letter-spacing:0.06em;color:#71717a;margin-bottom:8px'>WORKSPACE</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:11px;font-weight:700;letter-spacing:0.06em;color:#71717a;margin-bottom:8px'>PERSONAL WORKSPACE</p>", unsafe_allow_html=True)
+    
+    current_uname = st.session_state.get("username", "Default User")
+    
+    st.markdown(
+        f"""
+        <div style="background:{bg_card};border:1px solid {border_color};border-radius:10px;padding:10px;margin-bottom:10px;">
+            <div style="font-size:13px;font-weight:600;color:{text_main};display:flex;align-items:center;gap:6px;">
+                <span>👤</span>
+                <span>{current_uname}</span>
+            </div>
+            <div style="font-size:11px;color:#10b981;margin-top:4px;">
+                🔒 Private Memory & History Active
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col_acct, col_mem = st.columns(2)
+    with col_acct:
+        with st.popover("👤 User", use_container_width=True):
+            st.markdown("<p style='font-size:13px;font-weight:600;margin-bottom:4px;'>Switch / Create Account</p>", unsafe_allow_html=True)
+            new_uname = st.text_input("Username", value="", placeholder="Enter name or ID", key="new_user_input_field")
+            if st.button("Switch Workspace", key="submit_new_user_btn", use_container_width=True):
+                if new_uname.strip() and db:
+                    u_clean = new_uname.strip()
+                    user = db.get_user_by_username(u_clean)
+                    if not user:
+                        user = db.create_user(u_clean)
+                    st.session_state.user_id = user["user_id"]
+                    st.session_state.username = user["username"]
+                    convs = db.list_conversations(user["user_id"])
+                    st.session_state.conversations = convs
+                    if convs:
+                        st.session_state.conversation_id = convs[0]["conversation_id"]
+                        st.session_state.messages = db.get_messages(convs[0]["conversation_id"])
+                    else:
+                        new_c = db.create_conversation(user["user_id"], "New Chat")
+                        st.session_state.conversation_id = new_c["conversation_id"]
+                        st.session_state.messages = []
+                        st.session_state.conversations = [new_c]
+                    st.rerun()
+
+    with col_mem:
+        with st.popover("🧠 Memory", use_container_width=True):
+            st.markdown(f"<p style='font-size:13px;font-weight:600;margin-bottom:4px;'>🧠 AI Personal Memory</p>", unsafe_allow_html=True)
+            if db and st.session_state.user_id:
+                mems = db.get_user_memories(st.session_state.user_id, limit=20)
+                if mems:
+                    st.caption(f"Facts learned about {current_uname}:")
+                    for m in mems:
+                        st.markdown(f"• {m['content']}")
+                    if st.button("🗑️ Clear Memory", key="clear_mem_btn", use_container_width=True):
+                        db.clear_user_memories(st.session_state.user_id)
+                        st.success("Memory cleared!")
+                        st.rerun()
+                else:
+                    st.info("No personal memories saved yet. As you chat, the AI automatically remembers your preferences & facts!")
+
+    st.markdown("<p style='font-size:11px;font-weight:700;letter-spacing:0.06em;color:#71717a;margin-top:14px;margin-bottom:8px'>CONVERSATIONS</p>", unsafe_allow_html=True)
     
     st.markdown('<div class="new-chat-btn">', unsafe_allow_html=True)
     if st.button("+ New Chat", use_container_width=True):
@@ -521,7 +581,7 @@ with st.sidebar:
             st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown("<p style='font-size:11px;font-weight:700;letter-spacing:0.06em;color:#71717a;margin-top:18px;margin-bottom:8px'>RECENTS</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:11px;font-weight:700;letter-spacing:0.06em;color:#71717a;margin-top:14px;margin-bottom:8px'>RECENTS</p>", unsafe_allow_html=True)
 
     if st.session_state.conversations:
         for conv in st.session_state.conversations:

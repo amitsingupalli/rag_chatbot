@@ -260,3 +260,11 @@ class Database:
                 (user_id, limit),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def clear_user_memories(self, user_id: str) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM user_memory WHERE user_id = ?", (user_id,))
+
+    def delete_user_memory(self, memory_id: str) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM user_memory WHERE memory_id = ?", (memory_id,))
