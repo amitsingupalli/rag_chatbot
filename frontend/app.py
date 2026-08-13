@@ -585,23 +585,70 @@ with st.sidebar:
 
     if st.session_state.conversations:
         for conv in st.session_state.conversations:
-            is_active = conv["conversation_id"] == st.session_state.conversation_id
-            label = conv["title"][:30] + ("…" if len(conv["title"]) > 30 else "")
-            if st.button(
-                label,
-                key=f"conv_{conv['conversation_id']}",
-                use_container_width=True,
-                type="primary" if is_active else "secondary",
-            ):
-                st.session_state.conversation_id = conv["conversation_id"]
-                st.session_state.pending_doc_name = None
-                st.session_state.pending_image_name = None
-                st.session_state.pending_image = None
-                st.session_state.pop("last_indexed_file", None)
-                st.session_state.pop("last_indexed_chat_file", None)
-                if db:
-                    st.session_state.messages = db.get_messages(conv["conversation_id"])
-                st.rerun()
+            cid = conv["conversation_id"]
+            is_active = cid == st.session_state.conversation_id
+            label = conv["title"][:22] + ("…" if len(conv["title"]) > 22 else "")
+
+            c_title, c_opts = st.columns([0.78, 0.22])
+            with c_title:
+                if st.button(
+                    label,
+                    key=f"conv_{cid}",
+                    use_container_width=True,
+                    type="primary" if is_active else "secondary",
+                ):
+                    st.session_state.conversation_id = cid
+                    st.session_state.pending_doc_name = None
+                    st.session_state.pending_image_name = None
+                    st.session_state.pending_image = None
+                    st.session_state.pop("last_indexed_file", None)
+                    st.session_state.pop("last_indexed_chat_file", None)
+                    if db:
+                        st.session_state.messages = db.get_messages(cid)
+                    st.rerun()
+
+            with c_opts:
+                with st.popover("⋮", use_container_width=True):
+                    st.markdown("<p style='font-size:12px;font-weight:700;margin-bottom:6px;'>Chat Options</p>", unsafe_allow_html=True)
+                    
+                    # 1. SHARE / COPY CONVERSATION
+                    with st.expander("📋 Share (Copy Chat)"):
+                        msgs = db.get_messages(cid) if db else []
+                        if msgs:
+                            formatted_chat = f"# Conversation: {conv['title']}\n\n"
+                            for m in msgs:
+                                r_label = "User" if m["role"] == "user" else "AI Assistant"
+                                formatted_chat += f"**{r_label}**:\n{m['content']}\n\n---\n\n"
+                            st.text_area("Copy transcript below:", value=formatted_chat, height=140, key=f"share_txt_{cid}")
+                        else:
+                            st.info("No messages in this chat yet.")
+
+                    # 2. RENAME CHAT
+                    with st.expander("✏️ Rename Chat"):
+                        new_title_val = st.text_input("New Name", value=conv["title"], key=f"rename_in_{cid}")
+                        if st.button("Save Name", key=f"save_rename_{cid}", use_container_width=True):
+                            if new_title_val.strip() and db:
+                                db.update_conversation_title(cid, new_title_val.strip())
+                                st.session_state.conversations = db.list_conversations(st.session_state.user_id)
+                                st.rerun()
+
+                    # 3. DELETE CHAT
+                    with st.expander("🗑️ Delete Chat"):
+                        st.caption("Delete this chat permanently?")
+                        if st.button("Confirm Delete", key=f"del_confirm_{cid}", type="primary", use_container_width=True):
+                            if db:
+                                db.delete_conversation(cid)
+                                convs = db.list_conversations(st.session_state.user_id)
+                                st.session_state.conversations = convs
+                                if convs:
+                                    st.session_state.conversation_id = convs[0]["conversation_id"]
+                                    st.session_state.messages = db.get_messages(convs[0]["conversation_id"])
+                                else:
+                                    new_c = db.create_conversation(st.session_state.user_id, "New Chat")
+                                    st.session_state.conversation_id = new_c["conversation_id"]
+                                    st.session_state.messages = []
+                                    st.session_state.conversations = [new_c]
+                                st.rerun()
 
 
 
