@@ -490,9 +490,9 @@ div[data-testid="stChatInput"]:focus-within {{
 [data-testid="stInputInstructions"],
 div[data-testid="InputInstructions"],
 div[data-testid="stTextInput"] small,
-.stTextInput small {
+.stTextInput small {{
     display: none !important;
-}
+}}
 </style>
 """,
     unsafe_allow_html=True,
@@ -531,7 +531,7 @@ with st.sidebar:
         with st.popover("👤 Account", use_container_width=True):
             st.markdown("<p style='font-size:13px;font-weight:600;margin-bottom:4px;'>Account Sync & Login</p>", unsafe_allow_html=True)
             u_input = st.text_input("Workspace Name", value="", placeholder="e.g. Amit", key="new_user_input_field")
-            p_input = st.text_input("PIN / Password", value="", type="password", placeholder="Secret PIN or Password", key="new_user_pwd_field")
+            p_input = st.text_input("PIN / Password", value="", type="password", placeholder="Secret 6-Digit PIN or Password", key="new_user_pwd_field")
             
             if st.button("Login / Sync Workspace", key="submit_login_user_btn", use_container_width=True):
                 if u_input.strip() and db:
@@ -555,23 +555,28 @@ with st.sidebar:
                         else:
                             st.error("❌ Incorrect PIN / Password! Access Denied.")
                     else:
-                        hp = db.hash_password(p_input) if p_input else None
-                        user = db.create_user(u_clean, hashed_password=hp)
-                        st.session_state.user_id = user["user_id"]
-                        st.session_state.username = user["username"]
-                        new_c = db.create_conversation(user["user_id"], "New Chat")
-                        st.session_state.conversation_id = new_c["conversation_id"]
-                        st.session_state.messages = []
-                        st.session_state.conversations = [new_c]
-                        st.rerun()
+                        if p_input and len(p_input.strip()) < 6:
+                            st.warning("⚠️ Secret PIN / Password must be at least 6 digits/characters long!")
+                        else:
+                            hp = db.hash_password(p_input) if p_input else None
+                            user = db.create_user(u_clean, hashed_password=hp)
+                            st.session_state.user_id = user["user_id"]
+                            st.session_state.username = user["username"]
+                            new_c = db.create_conversation(user["user_id"], "New Chat")
+                            st.session_state.conversation_id = new_c["conversation_id"]
+                            st.session_state.messages = []
+                            st.session_state.conversations = [new_c]
+                            st.rerun()
 
             if st.button("🔐 Protect with Password", key="lock_acct_pwd_btn", use_container_width=True):
-                if p_input and db and st.session_state.user_id:
-                    db.set_user_password(st.session_state.user_id, p_input)
-                    st.success("Account password set! Now requires password on all devices.")
+                if p_input and len(p_input.strip()) >= 6 and db and st.session_state.user_id:
+                    db.set_user_password(st.session_state.user_id, p_input.strip())
+                    st.success("Account password set! Now requires 6-digit PIN on all devices.")
                     st.rerun()
+                elif p_input and len(p_input.strip()) < 6:
+                    st.warning("⚠️ Secret PIN / Password must be at least 6 digits/characters long!")
                 elif not p_input:
-                    st.warning("Enter a Password above to lock your account!")
+                    st.warning("Enter a 6-digit Password above to lock your account!")
 
     with col_mem:
         with st.popover("🧠 Memory", use_container_width=True):
