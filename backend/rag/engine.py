@@ -49,28 +49,50 @@ class AdvancedRAGEngine:
         self._setup_query_engine()
 
     def _setup_llm_and_embeddings(self) -> None:
-        gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or settings.gemini_api_key
+        self.gemini_keys = settings.get_gemini_api_keys
+        if not self.gemini_keys:
+            gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+            if gemini_key:
+                self.gemini_keys = [gemini_key]
 
-        if not gemini_key:
+        if not self.gemini_keys:
             raise ValueError(
                 "GEMINI_API_KEY environment variable or config setting is required to run the LLM."
             )
 
-        from llama_index.llms.gemini import Gemini
-
+        self.current_key_idx = 0
         model_name = settings.gemini_model
         if not model_name.startswith("models/"):
             model_name = f"models/{model_name}"
 
+        self.model_name = model_name
+        self._init_gemini_llm()
+        self.fallback_llm = None
+        logger.info("Initialized Gemini Key Pool (%d key(s) loaded)", len(self.gemini_keys))
+
+        # Set up HuggingFace embeddings
+        Settings.embed_model = HuggingFaceEmbedding(
+            model_name=settings.embedding_model,
+        )
+        logger.info("Using HuggingFace Embedding with model %s", settings.embedding_model)
+
+    def _init_gemini_llm(self) -> None:
+        from llama_index.llms.gemini import Gemini
+        curr_key = self.gemini_keys[self.current_key_idx]
         self.llm = Gemini(
-            model=model_name,
-            api_key=gemini_key,
+            model=self.model_name,
+            api_key=curr_key,
             temperature=0.2,
             max_tokens=settings.max_tokens,
         )
-        self.fallback_llm = None
-        logger.info("Using ONLY Google Gemini LLM with model %s (max_tokens=%d)", model_name, settings.max_tokens)
         Settings.llm = self.llm
+
+    def rotate_gemini_key(self) -> str:
+        if len(self.gemini_keys) > 1:
+            self.current_key_idx = (self.current_key_idx + 1) % len(self.gemini_keys)
+            logger.warning("Quota/Rate limit hit. Rotating to Gemini API Key #%d of %d", self.current_key_idx + 1, len(self.gemini_keys))
+            self._init_gemini_llm()
+        return self.gemini_keys[self.current_key_idx]
 
         # Set up HuggingFace embeddings
         Settings.embed_model = HuggingFaceEmbedding(
@@ -310,16 +332,25 @@ User question:
 
         messages.append(ChatMessage(role=MessageRole.USER, content=user_message_content))
 
-        try:
-            response = self.llm.chat(messages)
-            reply = str(response.message.content).strip()
-        except Exception as exc:
-            if self.fallback_llm and ("429" in str(exc) or "quota" in str(exc).lower() or "limit" in str(exc).lower()):
-                logger.warning("Primary LLM quota limit hit (%s). Falling back to Groq...", exc)
-                response = self.fallback_llm.chat(messages)
+        reply = None
+        max_attempts = max(1, len(self.gemini_keys))
+        last_exc = None
+        for attempt in range(max_attempts):
+            try:
+                response = self.llm.chat(messages)
                 reply = str(response.message.content).strip()
-            else:
-                raise exc
+                break
+            except Exception as exc:
+                last_exc = exc
+                err_msg = str(exc).lower()
+                if "429" in err_msg or "quota" in err_msg or "limit" in err_msg or "exhausted" in err_msg:
+                    logger.warning("Gemini Key #%d rate limit/quota hit. Rotating to next key...", self.current_key_idx + 1)
+                    self.rotate_gemini_key()
+                else:
+                    raise exc
+
+        if reply is None and last_exc:
+            raise last_exc
 
         self.memory.extract_and_store(user_id, message, reply)
 

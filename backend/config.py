@@ -43,6 +43,18 @@ class Settings(BaseSettings):
     web_page_max_chars: int = 4000
 
     @property
+    def get_gemini_api_keys(self) -> list[str]:
+        import re
+        keys = []
+        if self.gemini_api_key:
+            parts = re.split(r'[,\n]', str(self.gemini_api_key))
+            for p in parts:
+                clean = p.strip(' "\' \t')
+                if clean and clean not in keys:
+                    keys.append(clean)
+        return keys
+
+    @property
     def data_path(self) -> Path:
         path = Path(self.data_dir)
         return path if path.is_absolute() else PROJECT_ROOT / path
