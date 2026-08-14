@@ -45,7 +45,7 @@ def get_db_and_engine():
     try:
         db, engine = _load_engine_instance()
         import inspect
-        if "sources" not in inspect.signature(db.add_message).parameters:
+        if not hasattr(db, "verify_password") or "sources" not in inspect.signature(db.add_message).parameters:
             st.cache_resource.clear()
             return _load_engine_instance()
         return db, engine
