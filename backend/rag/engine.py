@@ -249,17 +249,19 @@ class AdvancedRAGEngine:
         user_id: str,
         conversation_id: str,
         message: str,
-        image_base64: str | None = None,
+        image_base64: str | list[str] | None = None,
         use_web_search: bool | None = None,
     ) -> dict[str, Any]:
         enriched_message = message
-        pil_img = None
+        pil_imgs = []
         if image_base64:
-            try:
-                from backend.rag.ocr import load_image_from_base64
-                pil_img = load_image_from_base64(image_base64)
-            except Exception as img_err:
-                logger.warning("Failed loading image base64: %s", img_err)
+            b64_list = [image_base64] if isinstance(image_base64, str) else image_base64
+            from backend.rag.ocr import load_image_from_base64
+            for b64_str in b64_list[:3]:
+                try:
+                    pil_imgs.append(load_image_from_base64(b64_str))
+                except Exception as img_err:
+                    logger.warning("Failed loading image base64: %s", img_err)
 
         user_memory = self.memory.get_context(user_id)
         rag_context, sources = self._retrieve_context(enriched_message, user_id=user_id, conversation_id=conversation_id)
@@ -275,12 +277,12 @@ class AdvancedRAGEngine:
             except Exception as exc:
                 logger.warning("Web search failed: %s", exc)
 
-        # Handle multimodal image vision directly with Gemini
-        if pil_img:
+        # Handle multimodal image vision directly with Gemini (supports up to 3 images)
+        if pil_imgs:
             try:
                 import google.generativeai as genai
-                gemini_key = os.getenv("GEMINI_API_KEY") or settings.gemini_api_key
-                genai.configure(api_key=gemini_key)
+                curr_key = self.gemini_keys[self.current_key_idx]
+                genai.configure(api_key=curr_key)
                 model_name = settings.gemini_model.replace("models/", "")
                 vision_model = genai.GenerativeModel(model_name)
 
@@ -291,8 +293,9 @@ Retrieved Context:
 
 User Query:
 {message}"""
+                vision_inputs = [vision_prompt] + pil_imgs
                 vision_res = vision_model.generate_content(
-                    [vision_prompt, pil_img],
+                    vision_inputs,
                     generation_config={"max_output_tokens": settings.max_tokens}
                 )
                 reply = vision_res.text.strip()

@@ -782,46 +782,56 @@ elif st.session_state.get("pending_image_name"):
 # ── Floating Input Dock with Left-Side + Button ───────────────────────────────
 attach_col, input_col = st.columns([1, 14])
 
+# ── Floating Input Dock with Left-Side + Button ───────────────────────────────
+attach_col, input_col = st.columns([1, 14])
+
 with attach_col:
-    with st.popover("+", help="Upload document or image"):
-        st.markdown("<p style='font-size:13px;font-weight:600;margin-bottom:6px'>Upload Attachment</p>", unsafe_allow_html=True)
-        tab_doc, tab_img = st.tabs(["📄 Document", "🖼️ Image"])
+    with st.popover("+", help="Upload up to 3 documents or images"):
+        st.markdown("<p style='font-size:13px;font-weight:600;margin-bottom:4px'>Upload Attachments (Max 3)</p>", unsafe_allow_html=True)
+        tab_doc, tab_img = st.tabs(["📄 Documents", "🖼️ Images"])
 
         with tab_doc:
-            doc_file = st.file_uploader(
-                "Upload Document",
+            doc_files = st.file_uploader(
+                "Upload Documents (Max 3)",
                 type=["pdf", "docx", "doc", "pptx", "ppt", "xlsx", "xls", "html", "htm", "md", "txt", "csv", "json", "tsv"],
+                accept_multiple_files=True,
                 label_visibility="collapsed",
                 key="chat_doc_uploader_popover",
             )
-            if doc_file and rag_engine and st.session_state.user_id:
-                file_key = f"doc_{doc_file.name}_{doc_file.size}_{st.session_state.conversation_id}"
-                if st.session_state.get("last_indexed_chat_file") != file_key:
-                    with st.spinner(f"Indexing {doc_file.name}…"):
-                        try:
-                            data = doc_file.read()
-                            chunks = rag_engine.ingestion.ingest_bytes(
-                                data, doc_file.name, st.session_state.user_id, st.session_state.conversation_id
-                            )
-                            st.session_state["last_indexed_chat_file"] = file_key
-                            st.session_state.pending_doc_name = doc_file.name
-                            st.caption(f"✓ Indexed {chunks} chunks from {doc_file.name}")
-                        except Exception as exc:
-                            st.error(f"Error indexing {doc_file.name}: {exc}")
-                else:
-                    st.caption(f"✓ {doc_file.name} ready")
+            if doc_files and rag_engine and st.session_state.user_id:
+                if len(doc_files) > 3:
+                    st.warning("⚠️ Maximum 3 files allowed at a time! Indexing the first 3...")
+                    doc_files = doc_files[:3]
+                for d_file in doc_files:
+                    file_key = f"doc_{d_file.name}_{d_file.size}_{st.session_state.conversation_id}"
+                    if not st.session_state.get(f"indexed_{file_key}"):
+                        with st.spinner(f"Indexing {d_file.name}…"):
+                            try:
+                                data = d_file.read()
+                                chunks = rag_engine.ingestion.ingest_bytes(
+                                    data, d_file.name, st.session_state.user_id, st.session_state.conversation_id
+                                )
+                                st.session_state[f"indexed_{file_key}"] = True
+                                st.caption(f"✓ Indexed {chunks} chunks from {d_file.name}")
+                            except Exception as exc:
+                                st.error(f"Error indexing {d_file.name}: {exc}")
+                    else:
+                        st.caption(f"✓ {d_file.name} ready")
 
         with tab_img:
-            img_file = st.file_uploader(
-                "Upload Image",
+            img_files = st.file_uploader(
+                "Upload Images (Max 3)",
                 type=["png", "jpg", "jpeg", "webp"],
+                accept_multiple_files=True,
                 label_visibility="collapsed",
                 key="chat_img_uploader_popover",
             )
-            if img_file:
-                st.session_state.pending_image = Image.open(img_file).convert("RGB")
-                st.session_state.pending_image_name = img_file.name
-                st.caption(f"✓ Image ready: {img_file.name}")
+            if img_files:
+                if len(img_files) > 3:
+                    st.warning("⚠️ Maximum 3 images allowed at a time! Attaching the first 3...")
+                    img_files = img_files[:3]
+                st.session_state.pending_images = [Image.open(f).convert("RGB") for f in img_files]
+                st.caption(f"✓ {len(img_files)} Image(s) ready: {', '.join(f.name for f in img_files)}")
 
 with input_col:
     initial_val = ""
@@ -834,14 +844,17 @@ if not user_input and initial_val:
     user_input = initial_val
 
 if user_input and st.session_state.conversation_id and rag_engine and db:
-    image_b64 = None
+    image_b64_list = []
     image_path = None
-    if st.session_state.pending_image:
-        image_b64 = image_to_base64(st.session_state.pending_image)
-        img_data = base64.b64decode(image_b64)
-        image_path = str(settings.uploads_path / f"{uuid.uuid4().hex}_chat_image.png")
-        with open(image_path, "wb") as f:
-            f.write(img_data)
+    if st.session_state.get("pending_images"):
+        for p_img in st.session_state.pending_images:
+            b64 = image_to_base64(p_img)
+            image_b64_list.append(b64)
+        if image_b64_list:
+            img_data = base64.b64decode(image_b64_list[0])
+            image_path = str(settings.uploads_path / f"{uuid.uuid4().hex}_chat_image.png")
+            with open(image_path, "wb") as f:
+                f.write(img_data)
 
     db.add_message(
         st.session_state.conversation_id,
@@ -860,8 +873,38 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
         f'<div class="user-bubble">{user_input}</div>',
         unsafe_allow_html=True,
     )
-    if st.session_state.pending_image:
-        st.image(st.session_state.pending_image, width=300)
+    if st.session_state.get("pending_images"):
+        for p_img in st.session_state.pending_images:
+            st.image(p_img, width=280)
+
+    with st.spinner("Analyzing context & generating response..."):
+        try:
+            res = rag_engine.chat(
+                user_id=st.session_state.user_id,
+                conversation_id=st.session_state.conversation_id,
+                message=user_input,
+                image_base64=image_b64_list if image_b64_list else None,
+            )
+            reply = res["reply"]
+            sources = res.get("sources", [])
+            web_sources = res.get("web_sources", [])
+
+            db.add_message(
+                st.session_state.conversation_id,
+                "assistant",
+                reply,
+                sources=sources,
+                web_sources=web_sources,
+            )
+            st.markdown(f'<div class="ai-bubble">{reply}</div>', unsafe_allow_html=True)
+
+            st.session_state.pending_images = []
+            st.session_state.pending_doc_name = None
+            st.session_state.pending_image_name = None
+            st.session_state.pending_image = None
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Error processing response: {exc}")
 
     # Shimmer indicator
     shimmer_placeholder = st.empty()
