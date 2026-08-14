@@ -85,11 +85,10 @@ if "selected_citation" not in st.session_state:
 if "preset_prompt" not in st.session_state:
     st.session_state.preset_prompt = None
 
-# Auto sign-in default user if not logged in
+# Auto-assign isolated session user if not logged in
 if not st.session_state.user_id and db:
-    user = db.get_user_by_username("default_user")
-    if not user:
-        user = db.create_user("default_user")
+    device_name = f"User_{uuid.uuid4().hex[:6]}"
+    user = db.create_user(device_name)
     st.session_state.user_id = user["user_id"]
     st.session_state.username = user["username"]
     convs = db.list_conversations(user["user_id"])
@@ -529,28 +528,50 @@ with st.sidebar:
 
     col_acct, col_mem = st.columns(2)
     with col_acct:
-        with st.popover("👤 User", use_container_width=True):
-            st.markdown("<p style='font-size:13px;font-weight:600;margin-bottom:4px;'>Switch / Create Account</p>", unsafe_allow_html=True)
-            new_uname = st.text_input("Username", value="", placeholder="Enter name or ID", key="new_user_input_field")
-            if st.button("Switch Workspace", key="submit_new_user_btn", use_container_width=True):
-                if new_uname.strip() and db:
-                    u_clean = new_uname.strip()
+        with st.popover("👤 Account", use_container_width=True):
+            st.markdown("<p style='font-size:13px;font-weight:600;margin-bottom:4px;'>Account Sync & Login</p>", unsafe_allow_html=True)
+            u_input = st.text_input("Workspace Name", value="", placeholder="e.g. Amit", key="new_user_input_field")
+            p_input = st.text_input("PIN / Password", value="", type="password", placeholder="Secret PIN or Password", key="new_user_pwd_field")
+            
+            if st.button("Login / Sync Workspace", key="submit_login_user_btn", use_container_width=True):
+                if u_input.strip() and db:
+                    u_clean = u_input.strip()
                     user = db.get_user_by_username(u_clean)
-                    if not user:
-                        user = db.create_user(u_clean)
-                    st.session_state.user_id = user["user_id"]
-                    st.session_state.username = user["username"]
-                    convs = db.list_conversations(user["user_id"])
-                    st.session_state.conversations = convs
-                    if convs:
-                        st.session_state.conversation_id = convs[0]["conversation_id"]
-                        st.session_state.messages = db.get_messages(convs[0]["conversation_id"])
+                    if user:
+                        if db.verify_password(p_input, user.get("hashed_password")):
+                            st.session_state.user_id = user["user_id"]
+                            st.session_state.username = user["username"]
+                            convs = db.list_conversations(user["user_id"])
+                            st.session_state.conversations = convs
+                            if convs:
+                                st.session_state.conversation_id = convs[0]["conversation_id"]
+                                st.session_state.messages = db.get_messages(convs[0]["conversation_id"])
+                            else:
+                                new_c = db.create_conversation(user["user_id"], "New Chat")
+                                st.session_state.conversation_id = new_c["conversation_id"]
+                                st.session_state.messages = []
+                                st.session_state.conversations = [new_c]
+                            st.rerun()
+                        else:
+                            st.error("❌ Incorrect PIN / Password! Access Denied.")
                     else:
+                        hp = db.hash_password(p_input) if p_input else None
+                        user = db.create_user(u_clean, hashed_password=hp)
+                        st.session_state.user_id = user["user_id"]
+                        st.session_state.username = user["username"]
                         new_c = db.create_conversation(user["user_id"], "New Chat")
                         st.session_state.conversation_id = new_c["conversation_id"]
                         st.session_state.messages = []
                         st.session_state.conversations = [new_c]
+                        st.rerun()
+
+            if st.button("🔐 Protect with Password", key="lock_acct_pwd_btn", use_container_width=True):
+                if p_input and db and st.session_state.user_id:
+                    db.set_user_password(st.session_state.user_id, p_input)
+                    st.success("Account password set! Now requires password on all devices.")
                     st.rerun()
+                elif not p_input:
+                    st.warning("Enter a Password above to lock your account!")
 
     with col_mem:
         with st.popover("🧠 Memory", use_container_width=True):

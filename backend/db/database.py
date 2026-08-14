@@ -95,6 +95,30 @@ class Database:
                 except Exception:
                     pass
 
+    @staticmethod
+    def hash_password(password: str) -> str:
+        import hashlib
+        return hashlib.sha256(f"rag_salt_{password}".encode("utf-8")).hexdigest()
+
+    def verify_password(self, plain_password: str, stored_hash: str | None) -> bool:
+        if not stored_hash:
+            return True
+        return self.hash_password(plain_password) == stored_hash
+
+    def set_user_password(self, user_id: str, plain_password: str) -> None:
+        h = self.hash_password(plain_password)
+        with self._connect() as conn:
+            conn.execute("UPDATE users SET hashed_password = ? WHERE user_id = ?", (h, user_id))
+
+    def authenticate_user(self, username: str, plain_password: str) -> dict[str, Any] | None:
+        user = self.get_user_by_username(username)
+        if not user:
+            return None
+        stored_hash = user.get("hashed_password")
+        if stored_hash and not self.verify_password(plain_password, stored_hash):
+            return None
+        return user
+
     def create_user(self, username: str, hashed_password: str | None = None) -> dict[str, Any]:
         user_id = str(uuid.uuid4())
         now = _utcnow()
