@@ -485,11 +485,15 @@ div[data-testid="stChatInput"]:focus-within {{
     margin-top: 6px;
 }}
 
-/* Hide default file uploader instructions */
+/* Hide default file uploader and text input instructions ('Press Enter to apply') */
 [data-testid="stFileUploaderDropzoneInstructions"],
-[data-testid="stFileUploaderFileData"] small {{
+[data-testid="stFileUploaderFileData"] small,
+[data-testid="stInputInstructions"],
+div[data-testid="InputInstructions"],
+div[data-testid="stTextInput"] small,
+.stTextInput small {
     display: none !important;
-}}
+}
 </style>
 """,
     unsafe_allow_html=True,
