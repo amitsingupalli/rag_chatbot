@@ -29,7 +29,11 @@ def extract_text_from_image(image: Image.Image) -> str:
         if _paddle_instance is None:
             _paddle_instance = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
         import numpy as np
-        img_np = np.array(image)
+        img_copy = image.copy().convert("RGB")
+        w, h = img_copy.size
+        if max(w, h) > 1600:
+            img_copy.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+        img_np = np.array(img_copy)
         result = _paddle_instance.ocr(img_np, cls=True)
         lines = []
         if result and result[0]:

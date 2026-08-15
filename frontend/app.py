@@ -499,9 +499,13 @@ div[data-testid="stTextInput"] small,
 )
 
 
-def image_to_base64(image: Image.Image) -> str:
+def image_to_base64(image: Image.Image, max_dim: int = 1600) -> str:
+    img = image.copy().convert("RGB")
+    w, h = img.size
+    if max(w, h) > max_dim:
+        img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
     buf = BytesIO()
-    image.save(buf, format="PNG")
+    img.save(buf, format="JPEG", quality=88)
     return base64.b64encode(buf.getvalue()).decode()
 
 
@@ -852,7 +856,7 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
             image_b64_list.append(b64)
         if image_b64_list:
             img_data = base64.b64decode(image_b64_list[0])
-            image_path = str(settings.uploads_path / f"{uuid.uuid4().hex}_chat_image.png")
+            image_path = str(settings.uploads_path / f"{uuid.uuid4().hex}_chat_image.jpg")
             with open(image_path, "wb") as f:
                 f.write(img_data)
 
@@ -869,21 +873,18 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
         db.update_conversation_title(st.session_state.conversation_id, title)
         st.session_state.conversations = db.list_conversations(st.session_state.user_id)
 
-    st.markdown(
-        f'<div class="user-bubble">{user_input}</div>',
-        unsafe_allow_html=True,
-    )
-    if st.session_state.get("pending_images"):
-        for p_img in st.session_state.pending_images:
-            st.image(p_img, width=280)
+    # Immediately sync session state messages so UI stays locked in chat mode
+    st.session_state.messages = db.get_messages(st.session_state.conversation_id)
 
     with st.spinner("Analyzing context & generating response..."):
         try:
+            use_web = st.session_state.get("kb_selector") == "🌐 Web & All Docs"
             res = rag_engine.chat(
                 user_id=st.session_state.user_id,
                 conversation_id=st.session_state.conversation_id,
                 message=user_input,
                 image_base64=image_b64_list if image_b64_list else None,
+                use_web_search=use_web,
             )
             reply = res["reply"]
             sources = res.get("sources", [])
@@ -896,7 +897,9 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
                 sources=sources,
                 web_sources=web_sources,
             )
-            st.markdown(f'<div class="ai-bubble">{reply}</div>', unsafe_allow_html=True)
+
+            # Sync session state messages right before rerun so chat screen renders instantly!
+            st.session_state.messages = db.get_messages(st.session_state.conversation_id)
 
             st.session_state.pending_images = []
             st.session_state.pending_doc_name = None
@@ -905,64 +908,6 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
             st.rerun()
         except Exception as exc:
             st.error(f"Error processing response: {exc}")
-
-    # Shimmer indicator
-    shimmer_placeholder = st.empty()
-    shimmer_placeholder.markdown('<div class="shimmer-text">✦ Searching documents & executing RAG perception chain…</div>', unsafe_allow_html=True)
-
-    try:
-        use_web = st.session_state.get("kb_selector") == "🌐 Web & All Docs"
-        result = rag_engine.chat(
-            user_id=st.session_state.user_id,
-            conversation_id=st.session_state.conversation_id,
-            message=user_input,
-            image_base64=image_b64,
-            use_web_search=use_web,
-        )
-        reply = result["reply"]
-        sources = result.get("sources", [])
-        web_sources = result.get("web_sources", [])
-        all_sources = sources + web_sources
-
-        try:
-            db.add_message(
-                st.session_state.conversation_id,
-                "assistant",
-                reply,
-                image_path=None,
-                sources=all_sources,
-            )
-        except TypeError:
-            db.add_message(
-                st.session_state.conversation_id,
-                "assistant",
-                reply,
-                image_path=None,
-            )
-
-        st.session_state.pending_image = None
-        st.session_state.pending_image_name = None
-
-        shimmer_placeholder.empty()
-
-        thought_html = f"""
-        <div class="assistant-container">
-            <div class="assistant-header">
-                <div class="assistant-avatar">✦</div>
-                <div class="assistant-label">Assistant</div>
-            </div>
-            <div class="assistant-content">{reply}</div>
-        </div>
-        """
-        st.markdown(thought_html, unsafe_allow_html=True)
-
-
-
-        st.session_state.messages = db.get_messages(st.session_state.conversation_id)
-        st.rerun()
-
-    except Exception as exc:
-        shimmer_placeholder.empty()
         st.error(f"Error generating response: {exc}")
 
 
