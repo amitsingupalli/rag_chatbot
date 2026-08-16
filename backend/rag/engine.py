@@ -17,8 +17,10 @@ try:
     from llama_index.core.llms import ChatMessage, MessageRole
 except ImportError:
     from llama_index.core.schema import ChatMessage, MessageRole
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.llms.groq import Groq
+try:
+    from llama_index.llms.groq import Groq
+except ImportError:
+    Groq = None
 
 from backend.config import settings
 from backend.db.database import Database
