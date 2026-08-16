@@ -70,11 +70,25 @@ class AdvancedRAGEngine:
         self.fallback_llm = None
         logger.info("Initialized Gemini Key Pool (%d key(s) loaded)", len(self.gemini_keys))
 
-        # Set up HuggingFace embeddings
-        Settings.embed_model = HuggingFaceEmbedding(
-            model_name=settings.embedding_model,
-        )
-        logger.info("Using HuggingFace Embedding with model %s", settings.embedding_model)
+        # Set up Embeddings (Gemini API Cloud Embeddings for 90% RAM savings, or HuggingFace fallback)
+        if settings.embedding_provider.lower() == "gemini":
+            try:
+                from llama_index.embeddings.gemini import GeminiEmbedding
+                curr_key = self.gemini_keys[self.current_key_idx]
+                emb_model = settings.embedding_model
+                if not emb_model.startswith("models/"):
+                    emb_model = f"models/{emb_model}"
+                Settings.embed_model = GeminiEmbedding(
+                    model_name=emb_model,
+                    api_key=curr_key,
+                )
+                logger.info("Using lightweight Gemini API Embedding (%s)", emb_model)
+            except Exception as emb_exc:
+                logger.warning("GeminiEmbedding initialization failed (%s), falling back to HuggingFace", emb_exc)
+                Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+        else:
+            Settings.embed_model = HuggingFaceEmbedding(model_name=settings.embedding_model)
+            logger.info("Using HuggingFace Embedding with model %s", settings.embedding_model)
 
     def _init_gemini_llm(self) -> None:
         from llama_index.llms.gemini import Gemini

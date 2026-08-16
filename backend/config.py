@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     groq_model: str = "llama-3.3-70b-versatile"
     llama_cloud_api_key: str | None = None
 
-    embedding_provider: str = "huggingface"
-    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_provider: str = "gemini"
+    embedding_model: str = "models/text-embedding-004"
 
     fastapi_host: str = "127.0.0.1"
     fastapi_port: int = 8000
