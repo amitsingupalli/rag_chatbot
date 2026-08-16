@@ -37,7 +37,7 @@ class IngestionPipeline:
                 from llama_index.embeddings.gemini import GeminiEmbedding
                 keys = settings.get_gemini_api_keys
                 curr_key = keys[0] if keys else None
-                emb_model = settings.embedding_model
+                emb_model = settings.gemini_embedding_model
                 if not emb_model.startswith("models/"):
                     emb_model = f"models/{emb_model}"
                 Settings.embed_model = GeminiEmbedding(
@@ -46,11 +46,10 @@ class IngestionPipeline:
                 )
             except Exception:
                 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-                Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+                Settings.embed_model = HuggingFaceEmbedding(model_name=settings.embedding_model)
         else:
             from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-            hf_m = settings.embedding_model if ("/" in settings.embedding_model and not settings.embedding_model.startswith("models/")) else "BAAI/bge-small-en-v1.5"
-            Settings.embed_model = HuggingFaceEmbedding(model_name=hf_m)
+            Settings.embed_model = HuggingFaceEmbedding(model_name=settings.embedding_model)
         self._splitter = SentenceSplitter(
             chunk_size=settings.chunk_size,
             chunk_overlap=settings.chunk_overlap,

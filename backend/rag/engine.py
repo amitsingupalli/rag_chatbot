@@ -77,7 +77,7 @@ class AdvancedRAGEngine:
             try:
                 from llama_index.embeddings.gemini import GeminiEmbedding
                 curr_key = self.gemini_keys[self.current_key_idx]
-                emb_model = settings.embedding_model
+                emb_model = settings.gemini_embedding_model
                 if not emb_model.startswith("models/"):
                     emb_model = f"models/{emb_model}"
                 Settings.embed_model = GeminiEmbedding(
@@ -87,11 +87,10 @@ class AdvancedRAGEngine:
                 logger.info("Using lightweight Gemini API Embedding (%s)", emb_model)
             except Exception as emb_exc:
                 logger.warning("GeminiEmbedding initialization failed (%s), falling back to HuggingFace BAAI/bge-small-en-v1.5", emb_exc)
-                Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+                Settings.embed_model = HuggingFaceEmbedding(model_name=settings.embedding_model)
         else:
-            hf_model = settings.embedding_model if ("/" in settings.embedding_model and not settings.embedding_model.startswith("models/")) else "BAAI/bge-small-en-v1.5"
-            Settings.embed_model = HuggingFaceEmbedding(model_name=hf_model)
-            logger.info("Using HuggingFace Embedding with model %s", hf_model)
+            Settings.embed_model = HuggingFaceEmbedding(model_name=settings.embedding_model)
+            logger.info("Using HuggingFace Embedding with model %s", settings.embedding_model)
 
     def _init_gemini_llm(self) -> None:
         from llama_index.llms.gemini import Gemini
@@ -110,12 +109,6 @@ class AdvancedRAGEngine:
             logger.warning("Quota/Rate limit hit. Rotating to Gemini API Key #%d of %d", self.current_key_idx + 1, len(self.gemini_keys))
             self._init_gemini_llm()
         return self.gemini_keys[self.current_key_idx]
-
-        # Set up HuggingFace embeddings
-        Settings.embed_model = HuggingFaceEmbedding(
-            model_name=settings.embedding_model,
-        )
-        logger.info("Using HuggingFace Embedding with model %s", settings.embedding_model)
 
     def _setup_query_engine(self) -> None:
         index = self.ingestion.index
