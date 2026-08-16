@@ -848,66 +848,70 @@ if not user_input and initial_val:
     user_input = initial_val
 
 if user_input and st.session_state.conversation_id and rag_engine and db:
-    image_b64_list = []
-    image_path = None
-    if st.session_state.get("pending_images"):
-        for p_img in st.session_state.pending_images:
-            b64 = image_to_base64(p_img)
-            image_b64_list.append(b64)
-        if image_b64_list:
-            img_data = base64.b64decode(image_b64_list[0])
-            image_path = str(settings.uploads_path / f"{uuid.uuid4().hex}_chat_image.jpg")
-            with open(image_path, "wb") as f:
-                f.write(img_data)
+    daily_count = db.get_user_daily_message_count(st.session_state.user_id) if hasattr(db, "get_user_daily_message_count") else 0
+    if daily_count >= 15:
+        st.warning("⏳ You've reached your daily limit! Your quota resets tomorrow.")
+    else:
+        image_b64_list = []
+        image_path = None
+        if st.session_state.get("pending_images"):
+            for p_img in st.session_state.pending_images:
+                b64 = image_to_base64(p_img)
+                image_b64_list.append(b64)
+            if image_b64_list:
+                img_data = base64.b64decode(image_b64_list[0])
+                image_path = str(settings.uploads_path / f"{uuid.uuid4().hex}_chat_image.jpg")
+                with open(image_path, "wb") as f:
+                    f.write(img_data)
 
-    db.add_message(
-        st.session_state.conversation_id,
-        "user",
-        user_input,
-        image_path,
-    )
+        db.add_message(
+            st.session_state.conversation_id,
+            "user",
+            user_input,
+            image_path,
+        )
 
-    msgs = db.get_messages(st.session_state.conversation_id)
-    if len(msgs) == 1:
-        title = user_input[:44] + ("..." if len(user_input) > 44 else "")
-        db.update_conversation_title(st.session_state.conversation_id, title)
-        st.session_state.conversations = db.list_conversations(st.session_state.user_id)
+        msgs = db.get_messages(st.session_state.conversation_id)
+        if len(msgs) == 1:
+            title = user_input[:44] + ("..." if len(user_input) > 44 else "")
+            db.update_conversation_title(st.session_state.conversation_id, title)
+            st.session_state.conversations = db.list_conversations(st.session_state.user_id)
 
-    # Immediately sync session state messages so UI stays locked in chat mode
-    st.session_state.messages = db.get_messages(st.session_state.conversation_id)
+        # Immediately sync session state messages so UI stays locked in chat mode
+        st.session_state.messages = db.get_messages(st.session_state.conversation_id)
 
-    with st.spinner("Analyzing context & generating response..."):
-        try:
-            use_web = st.session_state.get("kb_selector") == "🌐 Web & All Docs"
-            res = rag_engine.chat(
-                user_id=st.session_state.user_id,
-                conversation_id=st.session_state.conversation_id,
-                message=user_input,
-                image_base64=image_b64_list if image_b64_list else None,
-                use_web_search=use_web,
-            )
-            reply = res["reply"]
-            sources = res.get("sources", [])
-            web_sources = res.get("web_sources", [])
+        with st.spinner("Analyzing context & generating response..."):
+            try:
+                use_web = st.session_state.get("kb_selector") == "🌐 Web & All Docs"
+                res = rag_engine.chat(
+                    user_id=st.session_state.user_id,
+                    conversation_id=st.session_state.conversation_id,
+                    message=user_input,
+                    image_base64=image_b64_list if image_b64_list else None,
+                    use_web_search=use_web,
+                )
+                reply = res["reply"]
+                sources = res.get("sources", [])
+                web_sources = res.get("web_sources", [])
 
-            db.add_message(
-                st.session_state.conversation_id,
-                "assistant",
-                reply,
-                sources=sources,
-                web_sources=web_sources,
-            )
+                db.add_message(
+                    st.session_state.conversation_id,
+                    "assistant",
+                    reply,
+                    sources=sources,
+                    web_sources=web_sources,
+                )
 
-            # Sync session state messages right before rerun so chat screen renders instantly!
-            st.session_state.messages = db.get_messages(st.session_state.conversation_id)
+                # Sync session state messages right before rerun so chat screen renders instantly!
+                st.session_state.messages = db.get_messages(st.session_state.conversation_id)
 
-            st.session_state.pending_images = []
-            st.session_state.pending_doc_name = None
-            st.session_state.pending_image_name = None
-            st.session_state.pending_image = None
-            st.rerun()
-        except Exception as exc:
-            st.error(f"Error processing response: {exc}")
+                st.session_state.pending_images = []
+                st.session_state.pending_doc_name = None
+                st.session_state.pending_image_name = None
+                st.session_state.pending_image = None
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Error processing response: {exc}")
         st.error(f"Error generating response: {exc}")
 
 

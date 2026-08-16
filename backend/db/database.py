@@ -183,6 +183,19 @@ class Database:
             ).fetchone()
         return dict(row) if row else None
 
+    def get_user_daily_message_count(self, user_id: str) -> int:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) as count FROM messages m
+                JOIN conversations c ON m.conversation_id = c.conversation_id
+                WHERE c.user_id = ? AND m.role = 'user'
+                AND datetime(m.created_at) >= datetime('now', '-24 hours')
+                """,
+                (user_id,),
+            ).fetchone()
+        return row["count"] if row else 0
+
     def update_conversation_title(self, conversation_id: str, title: str) -> None:
         with self._connect() as conn:
             conn.execute(
