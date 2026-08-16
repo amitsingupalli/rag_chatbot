@@ -44,10 +44,20 @@ class Settings(BaseSettings):
 
     @property
     def get_gemini_api_keys(self) -> list[str]:
+        import os
         import re
         keys = []
-        if self.gemini_api_key:
-            parts = re.split(r'[,\n]', str(self.gemini_api_key))
+        raw_key = self.gemini_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if not raw_key:
+            try:
+                import streamlit as st
+                if "GEMINI_API_KEY" in st.secrets:
+                    raw_key = st.secrets["GEMINI_API_KEY"]
+            except Exception:
+                pass
+
+        if raw_key:
+            parts = re.split(r'[,\n]', str(raw_key))
             for p in parts:
                 clean = p.strip(' "\' \t')
                 if clean and clean not in keys:

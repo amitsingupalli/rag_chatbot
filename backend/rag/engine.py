@@ -86,11 +86,12 @@ class AdvancedRAGEngine:
                 )
                 logger.info("Using lightweight Gemini API Embedding (%s)", emb_model)
             except Exception as emb_exc:
-                logger.warning("GeminiEmbedding initialization failed (%s), falling back to HuggingFace", emb_exc)
+                logger.warning("GeminiEmbedding initialization failed (%s), falling back to HuggingFace BAAI/bge-small-en-v1.5", emb_exc)
                 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
         else:
-            Settings.embed_model = HuggingFaceEmbedding(model_name=settings.embedding_model)
-            logger.info("Using HuggingFace Embedding with model %s", settings.embedding_model)
+            hf_model = settings.embedding_model if ("/" in settings.embedding_model and not settings.embedding_model.startswith("models/")) else "BAAI/bge-small-en-v1.5"
+            Settings.embed_model = HuggingFaceEmbedding(model_name=hf_model)
+            logger.info("Using HuggingFace Embedding with model %s", hf_model)
 
     def _init_gemini_llm(self) -> None:
         from llama_index.llms.gemini import Gemini
