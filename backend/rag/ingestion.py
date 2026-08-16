@@ -32,8 +32,25 @@ class IngestionPipeline:
         self._collection = self._chroma_client.get_or_create_collection("rag_documents")
         self._vector_store = ChromaVectorStore(chroma_collection=self._collection)
         self._storage_context = StorageContext.from_defaults(vector_store=self._vector_store)
-        from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-        Settings.embed_model = HuggingFaceEmbedding(model_name=settings.embedding_model)
+        if settings.embedding_provider.lower() == "gemini":
+            try:
+                from llama_index.embeddings.gemini import GeminiEmbedding
+                keys = settings.get_gemini_api_keys
+                curr_key = keys[0] if keys else None
+                emb_model = settings.embedding_model
+                if not emb_model.startswith("models/"):
+                    emb_model = f"models/{emb_model}"
+                Settings.embed_model = GeminiEmbedding(
+                    model_name=emb_model,
+                    api_key=curr_key,
+                )
+            except Exception:
+                from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+                Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+        else:
+            from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+            hf_m = settings.embedding_model if ("/" in settings.embedding_model and not settings.embedding_model.startswith("models/")) else "BAAI/bge-small-en-v1.5"
+            Settings.embed_model = HuggingFaceEmbedding(model_name=hf_m)
         self._splitter = SentenceSplitter(
             chunk_size=settings.chunk_size,
             chunk_overlap=settings.chunk_overlap,
