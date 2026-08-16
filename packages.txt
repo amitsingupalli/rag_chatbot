@@ -1,2 +1,4 @@
-tesseract-ocr
+zlib1g-dev
+libjpeg-dev
 poppler-utils
+tesseract-ocr
