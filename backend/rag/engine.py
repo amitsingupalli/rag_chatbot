@@ -365,11 +365,6 @@ User question:
         if reply is None and last_exc:
             raise last_exc
 
-        self.memory.extract_and_store(user_id, message, reply)
-
-        if "remember" in message.lower():
-            self.memory.store_explicit(user_id, message)
-
         return {
             "reply": reply,
             "sources": sources,
