@@ -10,7 +10,8 @@ os.environ["PYTHONPATH"] = str(ROOT)
 
 
 def main() -> None:
-    print("Starting Streamlit RAG Chatbot...")
+    port = os.getenv("PORT", "8501")
+    print(f"Starting Streamlit RAG Chatbot on 0.0.0.0:{port}...")
     process = subprocess.Popen(
         [
             sys.executable,
@@ -18,6 +19,12 @@ def main() -> None:
             "streamlit",
             "run",
             str(ROOT / "frontend" / "app.py"),
+            "--server.address",
+            "0.0.0.0",
+            "--server.port",
+            port,
+            "--server.headless",
+            "true",
         ],
         cwd=ROOT,
         env={**os.environ, "PYTHONPATH": str(ROOT)},
