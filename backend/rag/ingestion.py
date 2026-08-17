@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import backend.nltk_patch  # Apply NLTK security patch
 import uuid
 from pathlib import Path
 
