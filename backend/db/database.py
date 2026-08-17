@@ -143,6 +143,22 @@ class Database:
             ).fetchone()
         return dict(row) if row else None
 
+    def migrate_user_data(self, old_user_id: str, new_user_id: str) -> None:
+        if not old_user_id or not new_user_id or old_user_id == new_user_id:
+            return
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE conversations SET user_id = ? WHERE user_id = ?",
+                (new_user_id, old_user_id),
+            )
+            try:
+                conn.execute(
+                    "UPDATE documents SET user_id = ? WHERE user_id = ?",
+                    (new_user_id, old_user_id),
+                )
+            except Exception:
+                pass
+
     def create_conversation(self, user_id: str, title: str = "New Chat") -> dict[str, Any]:
         conversation_id = str(uuid.uuid4())
         now = _utcnow()

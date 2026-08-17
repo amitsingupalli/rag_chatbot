@@ -540,9 +540,12 @@ with st.sidebar:
         if st.button("Login / Sync Workspace", key="submit_login_user_btn", use_container_width=True):
             if u_input.strip() and db:
                 u_clean = u_input.strip()
+                old_uid = st.session_state.get("user_id")
                 user = db.get_user_by_username(u_clean)
                 if user:
                     if db.verify_password(p_input, user.get("hashed_password")):
+                        if old_uid and old_uid != user["user_id"]:
+                            db.migrate_user_data(old_uid, user["user_id"])
                         st.session_state.user_id = user["user_id"]
                         st.session_state.username = user["username"]
                         convs = db.list_conversations(user["user_id"])
@@ -564,12 +567,20 @@ with st.sidebar:
                     else:
                         hp = db.hash_password(p_input) if p_input else None
                         user = db.create_user(u_clean, hashed_password=hp)
+                        if old_uid and old_uid != user["user_id"]:
+                            db.migrate_user_data(old_uid, user["user_id"])
                         st.session_state.user_id = user["user_id"]
                         st.session_state.username = user["username"]
-                        new_c = db.create_conversation(user["user_id"], "New Chat")
-                        st.session_state.conversation_id = new_c["conversation_id"]
-                        st.session_state.messages = []
-                        st.session_state.conversations = [new_c]
+                        convs = db.list_conversations(user["user_id"])
+                        st.session_state.conversations = convs
+                        if convs:
+                            st.session_state.conversation_id = convs[0]["conversation_id"]
+                            st.session_state.messages = db.get_messages(convs[0]["conversation_id"])
+                        else:
+                            new_c = db.create_conversation(user["user_id"], "New Chat")
+                            st.session_state.conversation_id = new_c["conversation_id"]
+                            st.session_state.messages = []
+                            st.session_state.conversations = [new_c]
                         st.rerun()
 
         if st.button("🔐 Protect with Password", key="lock_acct_pwd_btn", use_container_width=True):
