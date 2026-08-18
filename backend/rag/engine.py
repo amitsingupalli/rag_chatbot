@@ -65,10 +65,9 @@ class AdvancedRAGEngine:
             )
 
         self.current_key_idx = 0
-        model_name = settings.gemini_model
-        if not model_name.startswith("models/"):
-            model_name = f"models/{model_name}"
-
+        model_name = settings.gemini_model.strip()
+        if "1.5" in model_name or "2.0" in model_name or "flash-latest" in model_name or "models/" in model_name:
+            model_name = "gemini-3.6-flash"
         self.model_name = model_name
         self._init_gemini_llm()
         self.fallback_llm = None
