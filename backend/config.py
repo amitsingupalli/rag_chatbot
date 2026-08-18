@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     llama_cloud_api_key: str | None = None
 
     embedding_provider: str = "gemini"
-    gemini_embedding_model: str = "models/text-embedding-004"
+    gemini_embedding_model: str = "models/gemini-embedding-001"
     embedding_model: str = "BAAI/bge-small-en-v1.5"
 
     fastapi_host: str = "127.0.0.1"
