@@ -112,6 +112,8 @@ class AdvancedRAGEngine:
             self.current_key_idx = (self.current_key_idx + 1) % len(self.gemini_keys)
             logger.warning("Quota/Rate limit hit. Rotating to Gemini API Key #%d of %d", self.current_key_idx + 1, len(self.gemini_keys))
             self._init_gemini_llm()
+            import time
+            time.sleep(1.5)
         return self.gemini_keys[self.current_key_idx]
 
     def _setup_query_engine(self) -> None:
