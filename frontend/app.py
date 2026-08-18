@@ -907,6 +907,5 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
                 st.rerun()
             except Exception as exc:
                 st.error(f"Error processing response: {exc}")
-        st.error(f"Error generating response: {exc}")
 
 
