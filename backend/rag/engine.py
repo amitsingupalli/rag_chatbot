@@ -269,16 +269,36 @@ class AdvancedRAGEngine:
     ) -> dict[str, Any]:
         enriched_message = message
         pil_imgs = []
+        ocr_text_list = []
         if image_base64:
             b64_list = [image_base64] if isinstance(image_base64, str) else image_base64
-            from backend.rag.ocr import load_image_from_base64
+            from backend.rag.ocr import load_image_from_base64, process_image_base64
             for b64_str in b64_list[:3]:
                 try:
                     pil_imgs.append(load_image_from_base64(b64_str))
+                    ocr_res = process_image_base64(b64_str)
+                    if ocr_res and ocr_res.get("ocr_text"):
+                        ocr_text_list.append(ocr_res["ocr_text"])
                 except Exception as img_err:
                     logger.warning("Failed loading image base64: %s", img_err)
 
-        user_memory = self.memory.get_context(user_id)
+        # Index OCR text into ChromaDB under this conversation so follow-up queries remember the image content
+        if ocr_text_list and self.ingestion:
+            try:
+                combined_ocr = "\n\n".join(ocr_text_list)
+                self.ingestion.ingest_text_file(
+                    file_path=None,
+                    text=f"[Attached Image OCR Content]\n{combined_ocr}",
+                    filename="attached_chat_image.png",
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                )
+            except Exception as ocr_ingest_err:
+                logger.warning("Failed to index image OCR into ChromaDB: %s", ocr_ingest_err)
+
+        if ocr_text_list:
+            enriched_message = f"{message}\n\n[Attached Image OCR Text]:\n" + "\n".join(ocr_text_list)
+
         rag_context, sources = self._retrieve_context(enriched_message, user_id=user_id, conversation_id=conversation_id)
 
         web_context = ""
@@ -298,16 +318,20 @@ class AdvancedRAGEngine:
                 import google.generativeai as genai
                 curr_key = self.gemini_keys[self.current_key_idx]
                 genai.configure(api_key=curr_key)
-                model_name = settings.gemini_model.replace("models/", "")
+                model_name = self.model_name.replace("models/", "")
                 vision_model = genai.GenerativeModel(model_name)
 
                 vision_prompt = f"""{SYSTEM_PROMPT}
 
-Retrieved Context:
-{rag_context or '(none)'}
+CRITICAL VISUAL PRIORITY INSTRUCTION:
+The user has explicitly attached {len(pil_imgs)} image(s) to this query. You MUST prioritize analyzing the visual contents, text, diagrams, and objects in the ATTACHED IMAGE(S) to answer the user query. Do NOT default to answering from prior uploaded documents (like resumes or PDFs) unless the user explicitly asks to compare the image with those documents.
 
 User Query:
-{message}"""
+{message}
+
+(Background Document Context for reference only):
+{rag_context or '(none)'}"""
+
                 vision_inputs = [vision_prompt] + pil_imgs
                 vision_res = vision_model.generate_content(
                     vision_inputs,
@@ -315,15 +339,14 @@ User Query:
                 )
                 reply = vision_res.text.strip()
 
-                self.memory.extract_and_store(user_id, message, reply)
                 return {
                     "reply": reply,
-                    "sources": sources,
+                    "sources": sources or ["Attached Image"],
                     "web_sources": web_sources,
                     "used_web_search": used_web,
                 }
             except Exception as vision_err:
-                logger.warning("Gemini Vision processing failed: %s", vision_err)
+                logger.warning("Gemini Vision processing failed (%s), falling back to text LLM", vision_err)
 
         history = self._build_chat_history(conversation_id)
 
