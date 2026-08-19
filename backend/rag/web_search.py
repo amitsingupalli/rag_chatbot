@@ -52,9 +52,6 @@ CURRENT_AFFAIRS_KEYWORDS = (
     "web search",
     "do search",
     "search online",
-    "agentic ai",
-    "agentic",
-    "ai",
 )
 
 EXPLICIT_SEARCH_PHRASES = (
