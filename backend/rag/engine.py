@@ -176,17 +176,6 @@ class AdvancedRAGEngine:
             lower_q = query.lower()
             is_summary_q = any(w in lower_q for w in ["pdf", "document", "file", "about", "summary", "overview", "detail", "what is", "explain"])
 
-            if not all_nodes or is_summary_q:
-                try:
-                    transformed = self.query_transform.run(query)
-                    sub_queries = transformed if isinstance(transformed, list) else []
-                    for sub_q in sub_queries[:2]:
-                        if str(sub_q).strip() != query.strip():
-                            sub_nodes = self.query_engine.retrieve(QueryBundle(str(sub_q)))
-                            all_nodes.extend(sub_nodes)
-                except Exception:
-                    pass
-
             seen: set[str] = set()
             sources: list[str] = []
             chunks: list[str] = []
@@ -376,8 +365,6 @@ User Query:
         messages = [
             ChatMessage(role=MessageRole.SYSTEM, content=SYSTEM_PROMPT),
         ]
-        if user_memory:
-            messages.append(ChatMessage(role=MessageRole.SYSTEM, content=f"User Context Memory:\n{user_memory}"))
 
         # Add conversation history
         for msg in history[-10:]:
@@ -438,7 +425,6 @@ User question:
                 f"{message}\n\n[Image OCR Content]\n{ocr_result['ocr_text']}"
             )
 
-        user_memory = self.memory.get_context(user_id)
         rag_context, sources = self._retrieve_context(enriched_message, user_id=user_id, conversation_id=conversation_id)
 
         web_context = ""
@@ -457,8 +443,6 @@ User question:
         messages = [
             ChatMessage(role=MessageRole.SYSTEM, content=SYSTEM_PROMPT),
         ]
-        if user_memory:
-            messages.append(ChatMessage(role=MessageRole.SYSTEM, content=f"User Context Memory:\n{user_memory}"))
 
         for msg in history[-10:]:
             role = MessageRole.USER if msg.role == MessageRole.USER else MessageRole.ASSISTANT
@@ -482,8 +466,3 @@ User question:
             if delta:
                 full_reply += delta
                 yield delta, sources, web_sources, used_web
-
-        self.memory.extract_and_store(user_id, message, full_reply)
-
-        if "remember" in message.lower():
-            self.memory.store_explicit(user_id, message)
