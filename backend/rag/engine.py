@@ -282,6 +282,29 @@ class AdvancedRAGEngine:
                 except Exception as img_err:
                     logger.warning("Failed loading image base64: %s", img_err)
 
+        # Fast-path for simple greetings & casual conversational messages (<0.1s response time)
+        msg_clean = message.strip().lower()
+        if msg_clean in {"hello", "hi", "hey", "hello!", "hi!", "hey!", "good morning", "good evening", "good afternoon", "how are you", "how are you?", "thanks", "thank you", "thanks!", "thank you!"} and not pil_imgs:
+            greeting_responses = {
+                "hello": "Hello! How can I help you today? You can ask me questions, search the web, or upload documents and images to analyze.",
+                "hi": "Hi there! How can I assist you today?",
+                "hey": "Hey! What would you like to explore or analyze today?",
+                "good morning": "Good morning! How can I help you today?",
+                "good evening": "Good evening! How can I assist you with your research or documents today?",
+                "good afternoon": "Good afternoon! How can I help you today?",
+                "how are you": "I'm doing great and ready to assist you! What questions or documents would you like to analyze?",
+                "how are you?": "I'm doing great and ready to assist you! What questions or documents would you like to analyze?",
+                "thanks": "You're very welcome! Let me know if you need anything else.",
+                "thank you": "You're very welcome! Feel free to ask if you have more questions.",
+            }
+            reply_text = greeting_responses.get(msg_clean, "Hello! How can I help you today?")
+            return {
+                "reply": reply_text,
+                "sources": [],
+                "web_sources": [],
+                "used_web_search": False,
+            }
+
         # Index OCR text into ChromaDB under this conversation so follow-up queries remember the image content
         if ocr_text_list and self.ingestion:
             try:
