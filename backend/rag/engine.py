@@ -418,9 +418,28 @@ User question:
         image_base64: str | None = None,
         use_web_search: bool | None = None,
     ):
+        msg_clean = message.strip().lower()
+        if msg_clean in {"hello", "hi", "hey", "hello!", "hi!", "hey!", "good morning", "good evening", "good afternoon", "how are you", "how are you?", "thanks", "thank you", "thanks!", "thank you!"} and not image_base64:
+            greeting_responses = {
+                "hello": "Hello! How can I help you today? You can ask me questions, search the web, or upload documents and images to analyze.",
+                "hi": "Hi there! How can I assist you today?",
+                "hey": "Hey! What would you like to explore or analyze today?",
+                "good morning": "Good morning! How can I help you today?",
+                "good evening": "Good evening! How can I assist you with your research or documents today?",
+                "good afternoon": "Good afternoon! How can I help you today?",
+                "how are you": "I'm doing great and ready to assist you! What questions or documents would you like to analyze?",
+                "how are you?": "I'm doing great and ready to assist you! What questions or documents would you like to analyze?",
+                "thanks": "You're very welcome! Let me know if you need anything else.",
+                "thank you": "You're very welcome! Feel free to ask if you have more questions.",
+            }
+            reply_text = greeting_responses.get(msg_clean, "Hello! How can I help you today?")
+            yield reply_text, [], [], False
+            return
+
         enriched_message = message
         if image_base64:
-            ocr_result = process_image_base64(image_base64)
+            from backend.rag.ocr import process_image_base64
+            ocr_result = process_image_base64(image_base64 if isinstance(image_base64, str) else image_base64[0])
             enriched_message = (
                 f"{message}\n\n[Image OCR Content]\n{ocr_result['ocr_text']}"
             )

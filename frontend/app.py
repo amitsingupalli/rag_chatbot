@@ -875,37 +875,61 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
         # Immediately sync session state messages so UI stays locked in chat mode
         st.session_state.messages = db.get_messages(st.session_state.conversation_id)
 
-        with st.spinner("Analyzing context & generating response..."):
+        with st.chat_message("assistant"):
+            stop_container = st.empty()
+            with stop_container.container():
+                if st.button("⏹️ Stop Generating", key=f"stop_btn_{uuid.uuid4().hex[:6]}", help="Click to stop AI response generation"):
+                    st.session_state.stop_generation = True
+
+            use_web = st.session_state.get("kb_selector") == "🌐 Web & All Docs"
+            reply_placeholder = st.empty()
+            full_reply = ""
+            sources = []
+            web_sources = []
+            stopped_by_user = False
+
             try:
-                use_web = st.session_state.get("kb_selector") == "🌐 Web & All Docs"
-                res = rag_engine.chat(
+                stream_gen = rag_engine.chat_stream(
                     user_id=st.session_state.user_id,
                     conversation_id=st.session_state.conversation_id,
                     message=user_input,
                     image_base64=image_b64_list if image_b64_list else None,
                     use_web_search=use_web,
                 )
-                reply = res["reply"]
-                sources = res.get("sources", [])
-                web_sources = res.get("web_sources", [])
 
-                db.add_message(
-                    st.session_state.conversation_id,
-                    "assistant",
-                    reply,
-                    sources=sources,
-                    web_sources=web_sources,
-                )
+                for chunk, src, w_src, _ in stream_gen:
+                    if st.session_state.get("stop_generation"):
+                        stopped_by_user = True
+                        break
+                    full_reply += chunk
+                    sources = src
+                    web_sources = w_src
+                    reply_placeholder.markdown(full_reply + " ▌")
 
-                # Sync session state messages right before rerun so chat screen renders instantly!
+                if stopped_by_user:
+                    full_reply += "\n\n*[Response stopped by user]*"
+
+                reply_placeholder.markdown(full_reply)
+                stop_container.empty()
+
+                if full_reply.strip():
+                    db.add_message(
+                        st.session_state.conversation_id,
+                        "assistant",
+                        full_reply,
+                        sources=sources,
+                        web_sources=web_sources,
+                    )
+
                 st.session_state.messages = db.get_messages(st.session_state.conversation_id)
-
+                st.session_state.stop_generation = False
                 st.session_state.pending_images = []
                 st.session_state.pending_doc_name = None
                 st.session_state.pending_image_name = None
                 st.session_state.pending_image = None
                 st.rerun()
             except Exception as exc:
+                stop_container.empty()
                 st.error(f"Error processing response: {exc}")
 
 
