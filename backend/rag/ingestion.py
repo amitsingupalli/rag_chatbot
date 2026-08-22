@@ -70,6 +70,61 @@ class IngestionPipeline:
         nodes = self._splitter.get_nodes_from_documents([doc])
         return [Document(text=n.get_content(), metadata=n.metadata) for n in nodes]
 
+    def _safe_index_documents(self, docs: list[Document]) -> None:
+        """Safely index documents with batching, pacing, 429 rate limit retries, key rotation, and HuggingFace fallback."""
+        if not docs:
+            return
+
+        import time
+        batch_size = 15
+        for i in range(0, len(docs), batch_size):
+            batch = docs[i : i + batch_size]
+            max_retries = 4
+            success = False
+
+            for attempt in range(max_retries):
+                try:
+                    VectorStoreIndex.from_documents(
+                        batch,
+                        storage_context=self._storage_context,
+                        show_progress=False,
+                    )
+                    success = True
+                    time.sleep(0.4)  # Small pacing delay to stay strictly within 100 RPM Google API limit
+                    break
+                except Exception as exc:
+                    err_str = str(exc).lower()
+                    if "429" in err_str or "quota" in err_str or "limit" in err_str or "exhausted" in err_str:
+                        print(f"[Warning] Gemini Embedding Rate Limit (429) on batch {i//batch_size + 1} (attempt {attempt+1}/{max_retries}). Rotating key & sleeping 10s...")
+                        keys = settings.get_gemini_api_keys
+                        if len(keys) > 1:
+                            next_key = keys[(attempt + 1) % len(keys)]
+                            try:
+                                from llama_index.embeddings.gemini import GeminiEmbedding
+                                emb_model = settings.gemini_embedding_model
+                                if not emb_model.startswith("models/"):
+                                    emb_model = f"models/{emb_model}"
+                                Settings.embed_model = GeminiEmbedding(
+                                    model_name=emb_model,
+                                    api_key=next_key,
+                                )
+                            except Exception:
+                                pass
+                        time.sleep(10.0)
+                    else:
+                        print(f"[Warning] Ingestion batch exception: {exc}")
+                        time.sleep(2.0)
+
+            if not success:
+                print(f"[Notice] Gemini Embedding quota exhausted. Falling back to local HuggingFace embedding ({settings.embedding_model})...")
+                from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+                Settings.embed_model = HuggingFaceEmbedding(model_name=settings.embedding_model)
+                VectorStoreIndex.from_documents(
+                    batch,
+                    storage_context=self._storage_context,
+                    show_progress=False,
+                )
+
     def ingest_text_file(
         self, file_path: Path, user_id: str | None = None, conversation_id: str | None = None
     ) -> int:
@@ -81,11 +136,7 @@ class IngestionPipeline:
             "conversation_id": conversation_id or "global",
         }
         docs = self._build_documents_from_text(text, metadata)
-        VectorStoreIndex.from_documents(
-            docs,
-            storage_context=self._storage_context,
-            show_progress=False,
-        )
+        self._safe_index_documents(docs)
         return len(docs)
 
     def ingest_pdf(
@@ -176,11 +227,7 @@ class IngestionPipeline:
             return 0
         nodes = self._splitter.get_nodes_from_documents(pages)
         docs = [Document(text=n.get_content(), metadata=n.metadata) for n in nodes]
-        VectorStoreIndex.from_documents(
-            docs,
-            storage_context=self._storage_context,
-            show_progress=False,
-        )
+        self._safe_index_documents(docs)
         return len(docs)
 
     def ingest_image(
@@ -201,11 +248,7 @@ class IngestionPipeline:
             "ocr": result["ocr_text"][:500],
         }
         docs = self._build_documents_from_text(text, metadata)
-        VectorStoreIndex.from_documents(
-            docs,
-            storage_context=self._storage_context,
-            show_progress=False,
-        )
+        self._safe_index_documents(docs)
         return len(docs)
 
     def ingest_pptx(
@@ -270,11 +313,7 @@ class IngestionPipeline:
             return 0
         nodes = self._splitter.get_nodes_from_documents(slides)
         docs = [Document(text=n.get_content(), metadata=n.metadata) for n in nodes]
-        VectorStoreIndex.from_documents(
-            docs,
-            storage_context=self._storage_context,
-            show_progress=False,
-        )
+        self._safe_index_documents(docs)
         return len(docs)
 
     def ingest_csv(
@@ -288,11 +327,7 @@ class IngestionPipeline:
             "conversation_id": conversation_id or "global",
         }
         docs = self._build_documents_from_text(text, metadata)
-        VectorStoreIndex.from_documents(
-            docs,
-            storage_context=self._storage_context,
-            show_progress=False,
-        )
+        self._safe_index_documents(docs)
         return len(docs)
 
     def ingest_docx(
@@ -324,11 +359,7 @@ class IngestionPipeline:
                 "conversation_id": conversation_id or "global",
             }
             docs = self._build_documents_from_text(full_text, metadata)
-            VectorStoreIndex.from_documents(
-                docs,
-                storage_context=self._storage_context,
-                show_progress=False,
-            )
+            self._safe_index_documents(docs)
             return len(docs)
         except Exception as exc:
             print(f"[Error] docx parsing failed: {exc}")
@@ -359,11 +390,7 @@ class IngestionPipeline:
                 "conversation_id": conversation_id or "global",
             }
             docs = self._build_documents_from_text(full_text, metadata)
-            VectorStoreIndex.from_documents(
-                docs,
-                storage_context=self._storage_context,
-                show_progress=False,
-            )
+            self._safe_index_documents(docs)
             return len(docs)
         except Exception as exc:
             print(f"[Error] xlsx parsing failed: {exc}")
@@ -394,11 +421,7 @@ class IngestionPipeline:
                 "conversation_id": conversation_id or "global",
             }
             docs = self._build_documents_from_text(clean_text, metadata)
-            VectorStoreIndex.from_documents(
-                docs,
-                storage_context=self._storage_context,
-                show_progress=False,
-            )
+            self._safe_index_documents(docs)
             return len(docs)
         except Exception as exc:
             print(f"[Error] html parsing failed: {exc}")
