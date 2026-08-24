@@ -94,6 +94,11 @@ class Database:
                     conn.execute("ALTER TABLE messages ADD COLUMN web_sources TEXT")
                 except Exception:
                     pass
+            if "agent_trace" not in cols:
+                try:
+                    conn.execute("ALTER TABLE messages ADD COLUMN agent_trace TEXT")
+                except Exception:
+                    pass
 
     @staticmethod
     def hash_password(password: str) -> str:
@@ -244,6 +249,7 @@ class Database:
         image_path: str | None = None,
         sources: list[str] | str | None = None,
         web_sources: list[str] | str | None = None,
+        agent_trace: list[dict] | str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         import json
@@ -251,20 +257,22 @@ class Database:
             sources = kwargs["sources"]
         if "web_sources" in kwargs and not web_sources:
             web_sources = kwargs["web_sources"]
+        if "agent_trace" in kwargs and not agent_trace:
+            agent_trace = kwargs["agent_trace"]
 
         message_id = str(uuid.uuid4())
         now = _utcnow()
         src_str = json.dumps(sources) if isinstance(sources, list) else sources
         wsrc_str = json.dumps(web_sources) if isinstance(web_sources, list) else web_sources
+        trace_str = json.dumps(agent_trace) if isinstance(agent_trace, (list, dict)) else agent_trace
 
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO messages
-                (message_id, conversation_id, role, content, image_path, sources, web_sources, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO messages (message_id, conversation_id, role, content, image_path, sources, web_sources, agent_trace, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (message_id, conversation_id, role, content, image_path, src_str, wsrc_str, now),
+                (message_id, conversation_id, role, content, image_path, src_str, wsrc_str, trace_str, now),
             )
         self.touch_conversation(conversation_id)
         return {
@@ -273,8 +281,9 @@ class Database:
             "role": role,
             "content": content,
             "image_path": image_path,
-            "sources": sources,
-            "web_sources": web_sources,
+            "sources": src_str,
+            "web_sources": wsrc_str,
+            "agent_trace": trace_str,
             "created_at": now,
         }
 

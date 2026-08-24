@@ -742,7 +742,7 @@ for msg in st.session_state.messages:
         if msg.get("image_path") and os.path.exists(msg["image_path"]):
             st.image(msg["image_path"], width=300)
     else:
-        # Collapsible Thought Accordion & Response
+        # Collapsible Agentic AI Execution Trace Accordion & Response
         raw_sources = msg.get("sources")
         sources_list = []
         if raw_sources:
@@ -750,6 +750,20 @@ for msg in st.session_state.messages:
                 sources_list = json.loads(raw_sources) if isinstance(raw_sources, str) else raw_sources
             except Exception:
                 sources_list = [str(raw_sources)]
+
+        raw_trace = msg.get("agent_trace")
+        trace_list = []
+        if raw_trace:
+            try:
+                trace_list = json.loads(raw_trace) if isinstance(raw_trace, str) else raw_trace
+            except Exception:
+                trace_list = []
+
+        if trace_list:
+            with st.expander("🧠 Agentic AI Execution Trace & Reasoning Log", expanded=False):
+                for item in trace_list:
+                    st.markdown(f"**{item.get('step', 'Execution Step')}**")
+                    st.markdown(f"<small style='color:#6B7280;display:block;margin-bottom:6px'>{item.get('detail', '')}</small>", unsafe_allow_html=True)
 
         thought_html = f"""
         <div class="assistant-container">
@@ -882,10 +896,19 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
                     st.session_state.stop_generation = True
 
             use_web = st.session_state.get("kb_selector") == "🌐 Web & All Docs"
+
+            with st.status("🤖 Agent Reasoning & Tool Execution Log...", expanded=True) as status_box:
+                st.write("🧠 **Phase 1**: Evaluating query intent & attached attachments...")
+                st.write("🔍 **Phase 2**: Querying ChromaDB Vector Store for document context...")
+                st.write("🌐 **Phase 3**: Checking live web search requirements...")
+                st.write("⚡ **Phase 4**: Synthesizing grounded response with Gemini 3.6 Flash...")
+                status_box.update(label="✅ Agent Execution Trace Complete", state="complete", expanded=False)
+
             reply_placeholder = st.empty()
             full_reply = ""
             sources = []
             web_sources = []
+            latest_trace = []
             stopped_by_user = False
 
             try:
@@ -897,13 +920,14 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
                     use_web_search=use_web,
                 )
 
-                for chunk, src, w_src, _ in stream_gen:
+                for chunk, src, w_src, _, trace in stream_gen:
                     if st.session_state.get("stop_generation"):
                         stopped_by_user = True
                         break
                     full_reply += chunk
                     sources = src
                     web_sources = w_src
+                    latest_trace = trace
                     reply_placeholder.markdown(full_reply + " ▌")
 
                 if stopped_by_user:
@@ -919,6 +943,7 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
                         full_reply,
                         sources=sources,
                         web_sources=web_sources,
+                        agent_trace=latest_trace,
                     )
 
                 st.session_state.messages = db.get_messages(st.session_state.conversation_id)

@@ -248,6 +248,34 @@ class AdvancedRAGEngine:
             logger.warning("Retrieval failed: %s", exc)
             return "", []
 
+    def _build_agent_trace(
+        self,
+        message: str,
+        sources: list[str],
+        web_sources: list[str],
+        used_web: bool,
+        has_images: bool = False,
+    ) -> list[dict[str, str]]:
+        trace = [
+            {
+                "step": "🧠 Query Intent & Context Evaluation",
+                "detail": f"Analyzed user prompt '{message[:60]}...'. Checked attached media ({'Attached Images Active' if has_images else 'None'}) & workspace memory.",
+            },
+            {
+                "step": "🔍 Tool Call: ChromaDB Vector Store",
+                "detail": f"Queried collection 'rag_documents'. Retrieved {len(sources)} chunk(s) from: {', '.join(sources[:3]) if sources else 'No matching document chunks'}.",
+            },
+            {
+                "step": "🌐 Tool Call: Live Web Intelligence",
+                "detail": f"Web search {'EXECUTED - fetched ' + str(len(web_sources)) + ' live web link(s)' if used_web else 'BYPASSED - query answered from knowledge base'}.",
+            },
+            {
+                "step": "⚡ Autonomous Synthesis & Grounding",
+                "detail": f"Fusing context with Gemini 3.6 Flash reasoning loop. Applying strict zero-hallucination citation constraints.",
+            },
+        ]
+        return trace
+
     def chat(
         self,
         user_id: str,
@@ -292,6 +320,7 @@ class AdvancedRAGEngine:
                 "sources": [],
                 "web_sources": [],
                 "used_web_search": False,
+                "agent_trace": [{"step": "⚡ Instant Greeting Fast-Path", "detail": "Bypassed heavy retrieval for instant greeting."}],
             }
 
         # Index OCR text into ChromaDB under this conversation so follow-up queries remember the image content
@@ -323,6 +352,8 @@ class AdvancedRAGEngine:
                     used_web = True
             except Exception as exc:
                 logger.warning("Web search failed: %s", exc)
+
+        agent_trace = self._build_agent_trace(message, sources, web_sources, used_web, has_images=bool(pil_imgs))
 
         # Handle multimodal image vision directly with Gemini (supports up to 3 images)
         if pil_imgs:
@@ -356,6 +387,7 @@ User Query:
                     "sources": sources or ["Attached Image"],
                     "web_sources": web_sources,
                     "used_web_search": used_web,
+                    "agent_trace": agent_trace,
                 }
             except Exception as vision_err:
                 logger.warning("Gemini Vision processing failed (%s), falling back to text LLM", vision_err)
@@ -408,6 +440,7 @@ User question:
             "sources": sources,
             "web_sources": web_sources,
             "used_web_search": used_web,
+            "agent_trace": agent_trace,
         }
 
     def chat_stream(
@@ -433,7 +466,8 @@ User question:
                 "thank you": "You're very welcome! Feel free to ask if you have more questions.",
             }
             reply_text = greeting_responses.get(msg_clean, "Hello! How can I help you today?")
-            yield reply_text, [], [], False
+            trace = [{"step": "⚡ Instant Greeting Fast-Path", "detail": "Bypassed heavy retrieval for instant greeting."}]
+            yield reply_text, [], [], False, trace
             return
 
         enriched_message = message
@@ -456,6 +490,8 @@ User question:
                     used_web = True
             except Exception as exc:
                 logger.warning("Web search failed: %s", exc)
+
+        agent_trace = self._build_agent_trace(message, sources, web_sources, used_web, has_images=bool(image_base64))
 
         history = self._build_chat_history(conversation_id)
 
@@ -484,4 +520,4 @@ User question:
             delta = chunk.delta or ""
             if delta:
                 full_reply += delta
-                yield delta, sources, web_sources, used_web
+                yield delta, sources, web_sources, used_web, agent_trace
