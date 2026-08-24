@@ -723,7 +723,7 @@ if not st.session_state.messages:
         <div class="welcome-screen">
             <div class="claude-avatar-large">✦</div>
             <h1>{greeting}</h1>
-            <p class="welcome-sub">Autonomous Agentic AI Intelligence — Multi-task planning, quantitative data extraction, and tool orchestration.</p>
+            <p class="welcome-sub">Smart AI assistant that analyzes your documents, searches the web, and answers complex questions with exact citations.</p>
         </div>
         """,
         unsafe_allow_html=True,
