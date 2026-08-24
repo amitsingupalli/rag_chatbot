@@ -729,48 +729,7 @@ if not st.session_state.messages:
         unsafe_allow_html=True,
     )
 
-    st.markdown("<p style='font-size:13px;font-weight:600;color:#6B7280;margin-top:1.5rem;margin-bottom:0.75rem;'>🎯 Goal-Oriented Agentic Workflows:</p>", unsafe_allow_html=True)
-    
-    col_p1, col_p2, col_p3 = st.columns(3)
-    
-    with col_p1:
-        p1_text = "Analyze this paper, extract the experimental trade-offs between Standalone YOLOv11 and 3-Stage Hybrid CapsNet, calculate percentage change in false negatives, and generate an actionable research recommendation."
-        st.markdown(
-            f"""<div style="background:{bg_card};border:1px solid {border_color};border-radius:12px;padding:14px;height:100%;font-size:12px;">
-                <div style="font-weight:600;margin-bottom:6px;color:{accent_claude};">🎯 Multi-Task Trade-Off Analysis</div>
-                <div style="color:#9CA3AF;line-height:1.4;">"{p1_text[:110]}..."</div>
-            </div>""",
-            unsafe_allow_html=True,
-        )
-        if st.button("Run Goal Workflow", key="btn_goal_p1", use_container_width=True):
-            st.session_state.initial_chat_input = p1_text
-            st.rerun()
-
-    with col_p2:
-        p2_text = "Cross-reference uploaded model benchmarks, extract performance metrics across all tables, compute the precision-recall variance, and summarize key architectural trade-offs."
-        st.markdown(
-            f"""<div style="background:{bg_card};border:1px solid {border_color};border-radius:12px;padding:14px;height:100%;font-size:12px;">
-                <div style="font-weight:600;margin-bottom:6px;color:{accent_claude};">📊 Quantitative Metric Delta Audit</div>
-                <div style="color:#9CA3AF;line-height:1.4;">"{p2_text[:110]}..."</div>
-            </div>""",
-            unsafe_allow_html=True,
-        )
-        if st.button("Run Goal Workflow", key="btn_goal_p2", use_container_width=True):
-            st.session_state.initial_chat_input = p2_text
-            st.rerun()
-
-    with col_p3:
-        p3_text = "Parse methodology sections, extract image dataset counts, calculate relative accuracy improvements, and formulate an executive deployment strategy."
-        st.markdown(
-            f"""<div style="background:{bg_card};border:1px solid {border_color};border-radius:12px;padding:14px;height:100%;font-size:12px;">
-                <div style="font-weight:600;margin-bottom:6px;color:{accent_claude};">🔬 Autonomous Strategy Synthesis</div>
-                <div style="color:#9CA3AF;line-height:1.4;">"{p3_text[:110]}..."</div>
-            </div>""",
-            unsafe_allow_html=True,
-        )
-        if st.button("Run Goal Workflow", key="btn_goal_p3", use_container_width=True):
-            st.session_state.initial_chat_input = p3_text
-            st.rerun()
+    pass
 
 
 
