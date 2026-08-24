@@ -606,9 +606,7 @@ with st.sidebar:
             st.session_state.pending_image_name = None
             st.session_state.pending_image = None
             st.session_state.pop("last_indexed_file", None)
-            st.session_state.pop("last_indexed_chat_file", None)
             st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("<p style='font-size:11px;font-weight:700;letter-spacing:0.06em;color:#71717a;margin-top:14px;margin-bottom:8px'>RECENTS</p>", unsafe_allow_html=True)
 
@@ -753,42 +751,34 @@ for msg in st.session_state.messages:
             except Exception:
                 sources_list = [str(raw_sources)]
 
-        raw_trace = msg.get("agent_trace")
-        trace_list = []
-        if raw_trace:
-            try:
-                trace_list = json.loads(raw_trace) if isinstance(raw_trace, str) else raw_trace
-            except Exception:
-                trace_list = []
+        with st.chat_message("assistant"):
+            raw_trace = msg.get("agent_trace")
+            trace_list = []
+            if raw_trace:
+                try:
+                    trace_list = json.loads(raw_trace) if isinstance(raw_trace, str) else raw_trace
+                except Exception:
+                    trace_list = []
 
-        if trace_list:
-            with st.expander("🧠 Agentic AI Execution Trace (Thought → Tool Call → Reflection)", expanded=False):
-                for item in trace_list:
-                    lbl = item.get("label", item.get("step", "Step"))
-                    cnt = item.get("content", item.get("detail", ""))
-                    t_type = item.get("type", "")
+            if trace_list:
+                with st.expander("🧠 Agentic AI Execution Trace (Thought → Tool Call → Reflection)", expanded=False):
+                    for item in trace_list:
+                        lbl = item.get("label", item.get("step", "Step"))
+                        cnt = item.get("content", item.get("detail", ""))
+                        t_type = item.get("type", "")
 
-                    if t_type == "thought" or "Thought" in lbl:
-                        st.markdown(f"💭 **Thought:** {cnt}")
-                    elif t_type == "tool_call" or "Tool Call" in lbl:
-                        st.markdown(f"🛠️ **Tool Call:** `{cnt}`")
-                    elif t_type == "observation" or "Observation" in lbl:
-                        st.markdown(f"👁️ **Observation:** {cnt}")
-                    elif t_type == "reflection" or "Reflection" in lbl:
-                        st.markdown(f"🤔 **Reflection:** {cnt}")
-                    else:
-                        st.markdown(f"**{lbl}:** {cnt}")
+                        if t_type == "thought" or "Thought" in lbl:
+                            st.markdown(f"💭 **Thought:** {cnt}")
+                        elif t_type == "tool_call" or "Tool Call" in lbl:
+                            st.markdown(f"🛠️ **Tool Call:** `{cnt}`")
+                        elif t_type == "observation" or "Observation" in lbl:
+                            st.markdown(f"👁️ **Observation:** {cnt}")
+                        elif t_type == "reflection" or "Reflection" in lbl:
+                            st.markdown(f"🤔 **Reflection:** {cnt}")
+                        else:
+                            st.markdown(f"**{lbl}:** {cnt}")
 
-        thought_html = f"""
-        <div class="assistant-container">
-            <div class="assistant-header">
-                <div class="assistant-avatar">✦</div>
-                <div class="assistant-label">Assistant</div>
-            </div>
-            <div class="assistant-content">{msg["content"]}</div>
-        </div>
-        """
-        st.markdown(thought_html, unsafe_allow_html=True)
+            st.markdown(msg["content"])
         
 
 
