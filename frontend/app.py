@@ -937,14 +937,20 @@ if user_input and st.session_state.conversation_id and rag_engine and db:
                     use_web_search=use_web,
                 )
 
-                for chunk, src, w_src, _, trace in stream_gen:
+                for stream_item in stream_gen:
                     if st.session_state.get("stop_generation"):
                         stopped_by_user = True
                         break
+                    if len(stream_item) == 5:
+                        chunk, src, w_src, _, trace = stream_item
+                    else:
+                        chunk, src, w_src, _ = stream_item
+                        trace = []
                     full_reply += chunk
                     sources = src
                     web_sources = w_src
-                    latest_trace = trace
+                    if trace:
+                        latest_trace = trace
                     reply_placeholder.markdown(full_reply + " ▌")
 
                 if stopped_by_user:

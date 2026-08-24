@@ -130,8 +130,13 @@ async def send_message_stream(
             image_base64=payload.image_base64,
             use_web_search=payload.use_web_search,
         )
-        for delta, sources, web_sources, used_web in stream_gen:
-            chunk_data = json.dumps({"delta": delta, "sources": sources, "web_sources": web_sources})
+        for item in stream_gen:
+            if len(item) == 5:
+                delta, sources, web_sources, used_web, agent_trace = item
+            else:
+                delta, sources, web_sources, used_web = item
+                agent_trace = []
+            chunk_data = json.dumps({"delta": delta, "sources": sources, "web_sources": web_sources, "agent_trace": agent_trace})
             yield f"data: {chunk_data}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
