@@ -824,12 +824,15 @@ with attach_col:
                     if not st.session_state.get(f"indexed_{file_key}"):
                         with st.spinner(f"Indexing {d_file.name}…"):
                             try:
-                                data = d_file.read()
+                                data = d_file.getvalue() if hasattr(d_file, "getvalue") else d_file.read()
                                 chunks = rag_engine.ingestion.ingest_bytes(
                                     data, d_file.name, st.session_state.user_id, st.session_state.conversation_id
                                 )
-                                st.session_state[f"indexed_{file_key}"] = True
-                                st.caption(f"✓ Indexed {chunks} chunks from {d_file.name}")
+                                if chunks > 0:
+                                    st.session_state[f"indexed_{file_key}"] = True
+                                    st.caption(f"✓ Indexed {chunks} chunks from {d_file.name}")
+                                else:
+                                    st.error(f"⚠️ Could not extract text chunks from {d_file.name}. Please ensure file is not empty or password-protected.")
                             except Exception as exc:
                                 st.error(f"Error indexing {d_file.name}: {exc}")
                     else:

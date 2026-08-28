@@ -193,37 +193,73 @@ class IngestionPipeline:
                 print(f"[Warning] LlamaParse failed: {exc}. Falling back to PyPDF.")
 
         if not pages:
-            from pypdf import PdfReader
+            try:
+                from pypdf import PdfReader
 
-            reader = PdfReader(str(file_path))
-            for i, page in enumerate(reader.pages):
-                page_text = page.extract_text() or ""
-                if not page_text.strip() and hasattr(page, "images"):
-                    ocr_parts = []
-                    for img in page.images:
+                reader = PdfReader(str(file_path))
+                for i, page in enumerate(reader.pages):
+                    try:
+                        page_text = page.extract_text() or ""
+                    except Exception:
+                        page_text = ""
+                    if not page_text.strip() and hasattr(page, "images"):
+                        ocr_parts = []
                         try:
-                            res = process_image_bytes(img.data)
-                            if res.get("ocr_text") and not res["ocr_text"].startswith("[OCR"):
-                                ocr_parts.append(res["ocr_text"])
+                            for img in page.images:
+                                try:
+                                    res = process_image_bytes(img.data)
+                                    if res.get("ocr_text") and not res["ocr_text"].startswith("[OCR"):
+                                        ocr_parts.append(res["ocr_text"])
+                                except Exception:
+                                    pass
                         except Exception:
                             pass
-                    if ocr_parts:
-                        page_text = "\n".join(ocr_parts)
+                        if ocr_parts:
+                            page_text = "\n".join(ocr_parts)
 
-                if page_text.strip():
-                    pages.append(
-                        Document(
-                            text=page_text,
-                            metadata={
-                                "source": file_path.name,
-                                "page": i + 1,
-                                "type": "pdf",
-                                "user_id": user_id or "global",
-                                "conversation_id": conversation_id or "global",
-                            },
+                    if page_text.strip():
+                        pages.append(
+                            Document(
+                                text=page_text,
+                                metadata={
+                                    "source": file_path.name,
+                                    "page": i + 1,
+                                    "type": "pdf",
+                                    "user_id": user_id or "global",
+                                    "conversation_id": conversation_id or "global",
+                                },
+                            )
                         )
-                    )
+            except Exception as pypdf_err:
+                print(f"[Warning] PyPDF parse failed: {pypdf_err}. Trying pdfplumber fallback...")
+
         if not pages:
+            try:
+                import pdfplumber
+                with pdfplumber.open(str(file_path)) as pdf:
+                    for i, page in enumerate(pdf.pages):
+                        try:
+                            text = page.extract_text() or ""
+                        except Exception:
+                            text = ""
+                        if text.strip():
+                            pages.append(
+                                Document(
+                                    text=text,
+                                    metadata={
+                                        "source": file_path.name,
+                                        "page": i + 1,
+                                        "type": "pdfplumber",
+                                        "user_id": user_id or "global",
+                                        "conversation_id": conversation_id or "global",
+                                    },
+                                )
+                            )
+            except Exception as pdfplumber_err:
+                print(f"[Warning] pdfplumber parse failed: {pdfplumber_err}")
+
+        if not pages:
+            print(f"[Warning] No text or OCR extracted from PDF {file_path.name}")
             return 0
         nodes = self._splitter.get_nodes_from_documents(pages)
         docs = [Document(text=n.get_content(), metadata=n.metadata) for n in nodes]
