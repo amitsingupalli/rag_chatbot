@@ -63,8 +63,8 @@ class AdvancedRAGEngine:
 
         self.current_key_idx = 0
         model_name = settings.gemini_model.strip()
-        if "1.5" in model_name or "2.0" in model_name or "flash-latest" in model_name or "models/" in model_name:
-            model_name = "gemini-3.6-flash"
+        if any(k in model_name.lower() for k in ["1.5", "2.0", "flash-latest", "1.0"]):
+            model_name = "models/gemini-3.6-flash"
         self.model_name = model_name
         self._init_gemini_llm()
         self.fallback_llm = None
@@ -95,12 +95,27 @@ class AdvancedRAGEngine:
     def _init_gemini_llm(self) -> None:
         from llama_index.llms.gemini import Gemini
         curr_key = self.gemini_keys[self.current_key_idx]
-        self.llm = Gemini(
-            model=self.model_name,
-            api_key=curr_key,
-            temperature=0.2,
-            max_tokens=settings.max_tokens,
-        )
+        target_model = self.model_name
+        if any(k in target_model.lower() for k in ["1.5", "2.0", "flash-latest", "1.0"]):
+            target_model = "models/gemini-3.6-flash"
+        if not target_model.startswith("models/"):
+            target_model = f"models/{target_model}"
+
+        try:
+            self.llm = Gemini(
+                model=target_model,
+                api_key=curr_key,
+                temperature=0.2,
+                max_tokens=settings.max_tokens,
+            )
+        except Exception as exc:
+            logger.warning("Failed to initialize Gemini with model %s (%s). Falling back to models/gemini-3.6-flash", target_model, exc)
+            self.llm = Gemini(
+                model="models/gemini-3.6-flash",
+                api_key=curr_key,
+                temperature=0.2,
+                max_tokens=settings.max_tokens,
+            )
         Settings.llm = self.llm
 
     def rotate_gemini_key(self) -> str:
