@@ -132,25 +132,6 @@ class AdvancedRAGEngine:
         vector_retriever = index.as_retriever(similarity_top_k=settings.similarity_top_k)
         retriever = vector_retriever
 
-        try:
-            doc_count = len(index.docstore.docs)
-            if doc_count > 0:
-                from llama_index.retrievers.bm25 import BM25Retriever
-
-                bm25_retriever = BM25Retriever.from_defaults(
-                    docstore=index.docstore,
-                    similarity_top_k=settings.similarity_top_k,
-                )
-                retriever = QueryFusionRetriever(
-                    [vector_retriever, bm25_retriever],
-                    similarity_top_k=settings.similarity_top_k,
-                    num_queries=2,
-                    mode="reciprocal_rerank",
-                    use_async=False,
-                )
-        except Exception as exc:
-            logger.warning("BM25 retriever unavailable, using vector only: %s", exc)
-
         node_postprocessors = []
         self._reranker = None
         self._reranker_initialized = False
@@ -221,7 +202,7 @@ class AdvancedRAGEngine:
 
                     res_direct = self.ingestion._collection.get(
                         where=filter_dict if filter_dict else None,
-                        limit=25
+                        limit=5
                     )
                     
                     direct_docs = res_direct.get("documents", [])
