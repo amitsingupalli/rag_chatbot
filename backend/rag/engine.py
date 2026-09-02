@@ -98,25 +98,6 @@ class AdvancedRAGEngine:
         if not self.gemini_keys:
             raise ValueError("No Gemini API keys found.")
 
-        all_exhausted = all(k in EXHAUSTED_GEMINI_KEYS for k in self.gemini_keys)
-        groq_key = settings.groq_api_key or os.getenv("GROQ_API_KEY")
-        if not groq_key:
-            try:
-                import streamlit as st
-                if "GROQ_API_KEY" in st.secrets:
-                    groq_key = st.secrets["GROQ_API_KEY"]
-            except Exception:
-                pass
-
-        if all_exhausted and groq_key and Groq:
-            try:
-                logger.info("All Gemini API keys exhausted. Initializing Groq LLM fallback (%s)...", settings.groq_model)
-                self.llm = Groq(model=settings.groq_model, api_key=groq_key)
-                Settings.llm = self.llm
-                return
-            except Exception as exc:
-                logger.warning("Groq LLM fallback init failed: %s", exc)
-
         if self.gemini_keys[self.current_key_idx] in EXHAUSTED_GEMINI_KEYS:
             for idx, k in enumerate(self.gemini_keys):
                 if k not in EXHAUSTED_GEMINI_KEYS:
@@ -628,11 +609,10 @@ User question:
 
         if response_stream is None and last_exc:
             quota_msg = (
-                "⚠️ **Google Gemini API Free Quota Limit Reached (20 requests/day)**.\n\n"
-                "All Gemini API keys in your current key pool have reached their daily limit.\n\n"
-                "**How to resolve this instantly:**\n"
-                "1. Add a second free Gemini API key in Streamlit Secrets (`GEMINI_API_KEY_2 = 'AIzaSy...'`)\n"
-                "2. Or add a free Groq API key in Streamlit Secrets (`GROQ_API_KEY = 'gsk_...'`) for automatic backup!"
+                "⚠️ **Google Gemini API Free Daily Quota Reached (20 requests/day)**.\n\n"
+                "The current Gemini API key has reached its free tier limit for today.\n\n"
+                "**To continue immediately in your Gemini environment:**\n"
+                "Add a second free Gemini API key in Streamlit Secrets (e.g. `GEMINI_API_KEY_2 = 'AIzaSy...'` or `GEMINI_API_KEY = 'key1, key2'`). The system will automatically rotate to it!"
             )
             yield quota_msg, sources, web_sources, used_web, agent_trace
             return
