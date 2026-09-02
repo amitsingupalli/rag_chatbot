@@ -49,21 +49,35 @@ class Settings(BaseSettings):
         import os
         import re
         keys = []
-        raw_key = self.gemini_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        if not raw_key:
-            try:
-                import streamlit as st
-                if "GEMINI_API_KEY" in st.secrets:
-                    raw_key = st.secrets["GEMINI_API_KEY"]
-            except Exception:
-                pass
+        raw_sources = []
+        if self.gemini_api_key:
+            raw_sources.append(self.gemini_api_key)
 
-        if raw_key:
-            parts = re.split(r'[,\n]', str(raw_key))
-            for p in parts:
-                clean = p.strip(' "\' \t')
-                if clean and clean not in keys:
-                    keys.append(clean)
+        env_vars = [
+            "GEMINI_API_KEY", "GEMINI_API_KEYS", "GOOGLE_API_KEY",
+            "GEMINI_API_KEY_1", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEY_4", "GEMINI_API_KEY_5",
+            "GOOGLE_API_KEY_1", "GOOGLE_API_KEY_2", "GOOGLE_API_KEY_3", "GOOGLE_API_KEY_4", "GOOGLE_API_KEY_5",
+        ]
+        for v in env_vars:
+            val = os.getenv(v)
+            if val:
+                raw_sources.append(val)
+
+        try:
+            import streamlit as st
+            for v in env_vars:
+                if v in st.secrets:
+                    raw_sources.append(st.secrets[v])
+        except Exception:
+            pass
+
+        for raw in raw_sources:
+            if raw:
+                parts = re.split(r'[,\n;]', str(raw))
+                for p in parts:
+                    clean = p.strip(' "\' \t')
+                    if clean and len(clean) > 20 and clean not in keys:
+                        keys.append(clean)
         return keys
 
     @property

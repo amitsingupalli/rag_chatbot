@@ -30,6 +30,7 @@ from backend.rag.ocr import process_image_base64
 from backend.rag.web_search import search_web, should_search_web
 
 logger = logging.getLogger(__name__)
+EXHAUSTED_GEMINI_KEYS: set[str] = set()
 
 SYSTEM_PROMPT = """You are a Goal-Oriented Agentic AI Research Intelligence.
 Today's date is August 2026. You possess full capability to process current information, recent technological developments, and news from 2024, 2025, 2026, and beyond.
@@ -94,6 +95,15 @@ class AdvancedRAGEngine:
 
     def _init_gemini_llm(self) -> None:
         from llama_index.llms.gemini import Gemini
+        if not self.gemini_keys:
+            raise ValueError("No Gemini API keys found.")
+
+        if self.gemini_keys[self.current_key_idx] in EXHAUSTED_GEMINI_KEYS:
+            for idx, k in enumerate(self.gemini_keys):
+                if k not in EXHAUSTED_GEMINI_KEYS:
+                    self.current_key_idx = idx
+                    break
+
         curr_key = self.gemini_keys[self.current_key_idx]
         target_model = self.model_name
         if any(k in target_model.lower() for k in ["1.5", "2.0", "flash-latest", "1.0"]):
@@ -118,13 +128,23 @@ class AdvancedRAGEngine:
             )
         Settings.llm = self.llm
 
-    def rotate_gemini_key(self) -> str:
+    def rotate_gemini_key(self, mark_exhausted: bool = True) -> str:
+        if not self.gemini_keys:
+            return ""
+        curr_key = self.gemini_keys[self.current_key_idx]
+        if mark_exhausted and curr_key:
+            EXHAUSTED_GEMINI_KEYS.add(curr_key)
+
         if len(self.gemini_keys) > 1:
-            self.current_key_idx = (self.current_key_idx + 1) % len(self.gemini_keys)
-            logger.warning("Quota/Rate limit hit. Rotating to Gemini API Key #%d of %d", self.current_key_idx + 1, len(self.gemini_keys))
+            for _ in range(len(self.gemini_keys)):
+                self.current_key_idx = (self.current_key_idx + 1) % len(self.gemini_keys)
+                candidate_key = self.gemini_keys[self.current_key_idx]
+                if candidate_key not in EXHAUSTED_GEMINI_KEYS:
+                    break
+            logger.warning("Quota/Rate limit hit. Rotated to Gemini API Key #%d of %d", self.current_key_idx + 1, len(self.gemini_keys))
             self._init_gemini_llm()
             import time
-            time.sleep(1.5)
+            time.sleep(1.0)
         return self.gemini_keys[self.current_key_idx]
 
     def _setup_query_engine(self) -> None:
