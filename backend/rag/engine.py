@@ -483,7 +483,7 @@ User question:
         messages.append(ChatMessage(role=MessageRole.USER, content=user_message_content))
 
         reply = None
-        max_attempts = max(1, len(self.gemini_keys))
+        max_attempts = max(3, len(self.gemini_keys) * 2)
         last_exc = None
         for attempt in range(max_attempts):
             try:
@@ -493,9 +493,11 @@ User question:
             except Exception as exc:
                 last_exc = exc
                 err_msg = str(exc).lower()
-                if "429" in err_msg or "quota" in err_msg or "limit" in err_msg or "exhausted" in err_msg:
-                    logger.warning("Gemini Key #%d rate limit/quota hit. Rotating to next key...", self.current_key_idx + 1)
+                if any(k in err_msg for k in ["429", "503", "500", "quota", "limit", "exhausted", "demand", "unavailable", "spikes"]):
+                    logger.warning("Gemini API transient error / 503 high demand hit on Key #%d (%s). Rotating key and retrying in 2.0s...", self.current_key_idx + 1, exc)
                     self.rotate_gemini_key()
+                    import time
+                    time.sleep(2.0)
                 else:
                     raise exc
 
@@ -586,13 +588,40 @@ User question:
 
         messages.append(ChatMessage(role=MessageRole.USER, content=user_message_content))
 
-        response_stream = self.llm.stream_chat(messages)
+        response_stream = None
+        max_attempts = max(3, len(self.gemini_keys) * 2)
+        last_exc = None
+        for attempt in range(max_attempts):
+            try:
+                response_stream = self.llm.stream_chat(messages)
+                break
+            except Exception as exc:
+                last_exc = exc
+                err_msg = str(exc).lower()
+                if any(k in err_msg for k in ["429", "503", "500", "quota", "limit", "exhausted", "demand", "unavailable", "spikes"]):
+                    logger.warning("Gemini API transient error / 503 high demand hit on Key #%d (%s). Rotating key and retrying in 2.0s...", self.current_key_idx + 1, exc)
+                    self.rotate_gemini_key()
+                    import time
+                    time.sleep(2.0)
+                else:
+                    raise exc
+
+        if response_stream is None and last_exc:
+            raise last_exc
+
         full_reply = ""
-        for chunk in response_stream:
-            delta = chunk.delta or ""
-            if delta:
-                full_reply += delta
-                yield delta, sources, web_sources, used_web, agent_trace
+        try:
+            for chunk in response_stream:
+                delta = chunk.delta or ""
+                if delta:
+                    full_reply += delta
+                    yield delta, sources, web_sources, used_web, agent_trace
+        except Exception as exc:
+            err_msg = str(exc).lower()
+            if any(k in err_msg for k in ["429", "503", "500", "quota", "limit", "exhausted", "demand", "unavailable", "spikes"]):
+                logger.warning("Gemini stream chunk error 503/429 (%s). Rotating key...", exc)
+                self.rotate_gemini_key()
+            raise exc
 
         if full_reply and any(k in message.lower() for k in ["chart", "plot", "visualize", "percentage change", "trade-off", "capsnet", "yolo"]):
             c_path = self.generate_metric_chart()
